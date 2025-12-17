@@ -15,7 +15,6 @@
         }
     </style>
     <script>
-      // Configuração para silenciar avisos do Tailwind CDN e definir fontes
       window.tailwind = window.tailwind || {};
       tailwind.config = {
         theme: {
@@ -26,8 +25,8 @@
           },
         },
       }
-      
-      // Proteção contra conflitos de variáveis globais de extensões
+      // Proteção contra variáveis globais de extensões
+      window.supabase = null;
       window.supabaseClient = null;
     </script>
     <script type="importmap">

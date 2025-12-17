@@ -1,6 +1,6 @@
 
 {
-  "name": "md-financas",
+  "name": "sistema-financeiro-md",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
@@ -13,5 +13,8 @@
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
     "typescript": "5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
