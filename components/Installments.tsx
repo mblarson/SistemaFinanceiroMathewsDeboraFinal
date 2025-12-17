@@ -35,6 +35,10 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth }) => {
         .order('criado_em', { ascending: false });
       
       if (error) throw error;
+      
+      // LOG DE DIAGNÓSTICO: Verifique no console se as propriedades total_parcelas existem aqui
+      console.log("Dados recebidos do banco:", data);
+      
       setInstallments(data || []);
     } catch (error) {
       console.error("Erro ao buscar parcelamentos:", error);
@@ -73,7 +77,6 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Garantindo que os valores sejam convertidos para números antes do envio
     const val = parseCurrency(formData.val);
     const atual = parseInt(formData.atual, 10);
     const total = parseInt(formData.total, 10);
@@ -88,29 +91,28 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth }) => {
       descricao: formData.desc,
       valor_parcela: val,
       parcela_atual: atual,
-      total_parcelas: total
+      total_parcelas: total // Certifique-se que o nome no banco é exatamente este
     };
 
     try {
-      let result;
+      let error;
       if (editingId) {
-        result = await supabaseClient.from('parcelamentos').update(payload).eq('id', editingId);
+        const res = await supabaseClient.from('parcelamentos').update(payload).eq('id', editingId);
+        error = res.error;
       } else {
-        result = await supabaseClient.from('parcelamentos').insert([payload]);
+        const res = await supabaseClient.from('parcelamentos').insert([payload]);
+        error = res.error;
       }
       
-      if (result.error) {
-        throw result.error;
-      }
+      if (error) throw error;
       
       setShowModal(false);
       setEditingId(null);
       setFormData({ desc: '', val: 'R$ 0,00', atual: '1', total: '1' });
       fetchData();
     } catch (error: any) {
-      console.error("Erro ao salvar parcelamento:", error);
-      // Alerta crítico para o usuário saber o que aconteceu
-      alert(`Erro ao salvar no banco de dados: ${error.message || 'Verifique se a coluna total_parcelas existe no banco.'}`);
+      console.error("Erro ao salvar:", error);
+      alert(`Erro no banco: ${error.message}. Verifique se a coluna 'total_parcelas' existe na tabela.`);
     }
   };
 
@@ -155,8 +157,6 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth }) => {
               const pAtual = item.parcela_atual ?? 1;
               const pTotal = item.total_parcelas ?? 1;
               const pValor = item.valor_parcela ?? 0;
-
-              // Cálculo de quitação: (Total - Atual + 1) parcelas a serem pagas
               const parcelasPendentes = Math.max(0, (pTotal - pAtual + 1));
               const totalQuitacao = pValor * parcelasPendentes;
 
@@ -179,21 +179,19 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth }) => {
                       {currentMonth.status === 'ativo' && (
                         <div className="flex items-center gap-2">
                           {confirmDeleteId !== item.id && (
-                            <button 
-                              onClick={() => openEditModal(item)}
-                              className="text-gray-200 hover:text-blue-600 transition p-2"
-                            >
+                            <button onClick={() => openEditModal(item)} className="text-gray-200 hover:text-blue-600 transition p-2">
                               <Pencil size={20} />
                             </button>
                           )}
-
                           {confirmDeleteId === item.id ? (
                             <div className="flex items-center gap-2 bg-red-600 text-white p-1 rounded-full shadow-2xl animate-in zoom-in duration-200 border-2 border-white">
                               <button onClick={() => handleDelete(item.id)} className="pl-3 pr-2 py-1 text-[10px] font-black uppercase rounded-l-full">Confirmar</button>
                               <button onClick={() => setConfirmDeleteId(null)} className="bg-white/20 p-2 rounded-full"><LucideX size={14} /></button>
                             </div>
                           ) : (
-                            <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-300 hover:text-red-500 transition p-2"><Trash2 size={20} /></button>
+                            <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-300 hover:text-red-500 transition p-2">
+                              <Trash2 size={20} />
+                            </button>
                           )}
                         </div>
                       )}
