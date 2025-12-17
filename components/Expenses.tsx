@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-// FIX: Alias 'X' as 'LucideX' to resolve the 'Cannot find name LucideX' error.
-import { Receipt, Zap, Plus, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
+import { Receipt, Zap, Plus, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, Calendar } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Expense, PixExpense } from '../types';
 
@@ -126,7 +125,6 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
 
   return (
     <div className="space-y-6">
-      {/* Abas com largura total e flexível */}
       <div className="flex w-full bg-gray-200/50 p-1 rounded-2xl gap-1">
         <button 
           onClick={() => setActiveTab('contas')} 
@@ -164,27 +162,46 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
             <p className="font-bold uppercase tracking-widest text-[10px]">Sincronizando...</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeTab === 'contas' ? (
-              expenses.length === 0 ? <p className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Vazio por aqui.</p> :
+              expenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Vazio por aqui.</p> :
               expenses.map(exp => (
-                <div key={exp.id} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200'}`}>
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} className={`transition ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}>
-                      {exp.pago ? <CheckCircle2 size={26} /> : <Circle size={26} />}
+                <div key={exp.id} className={`flex flex-col p-6 rounded-[2rem] border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200 shadow-sm'}`}>
+                  {/* Linha 1: Toggle e Descrição */}
+                  <div className="flex items-start gap-3 mb-4">
+                    <button 
+                      onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
+                      className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                    >
+                      {exp.pago ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                     </button>
-                    <div>
-                      <h4 className={`font-black text-gray-800 ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
-                      <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{new Date(exp.data).toLocaleDateString('pt-BR')}</p>
+                    <div className="min-w-0">
+                      <h4 className={`font-bold text-gray-800 text-lg truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
+                        {exp.descricao}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                        {new Date(exp.data).toLocaleDateString('pt-BR')}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <span className="font-black text-lg text-gray-900">{formatCurrency(exp.valor)}</span>
+
+                  {/* Divisor */}
+                  <div className="h-px w-full bg-gray-100 mb-4"></div>
+
+                  {/* Linha 2: Valor e Ações */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xl text-gray-900 tracking-tight">
+                      {formatCurrency(exp.valor)}
+                    </span>
                     <div className="flex items-center gap-1">
                       {currentMonth.status === 'ativo' && (
                         <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2"><Pencil size={18} /></button>
-                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2"><Trash2 size={18} /></button>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2 hover:bg-blue-50 rounded-lg">
+                            <Pencil size={18} />
+                          </button>
+                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2 hover:bg-red-50 rounded-lg">
+                            <Trash2 size={18} />
+                          </button>
                         </>
                       )}
                     </div>
@@ -192,25 +209,44 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
                 </div>
               ))
             ) : (
-              pixExpenses.length === 0 ? <p className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Sem Pix registrados.</p> :
+              pixExpenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Sem Pix registrados.</p> :
               pixExpenses.map(exp => (
-                <div key={exp.id} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200'}`}>
-                   <div className="flex items-center gap-4">
-                    <button onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} className={`transition ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}>
-                      {exp.pago ? <CheckCircle2 size={26} /> : <Circle size={26} />}
+                <div key={exp.id} className={`flex flex-col p-6 rounded-[2rem] border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200 shadow-sm'}`}>
+                  {/* Linha 1: Descrição e Taxa */}
+                  <div className="flex items-start gap-3 mb-4">
+                    <button 
+                      onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
+                      className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                    >
+                      {exp.pago ? <CheckCircle2 size={24} /> : <Circle size={24} />}
                     </button>
-                    <div>
-                      <h4 className={`font-black text-gray-800 ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
-                      <p className="text-[10px] text-gray-400 font-black uppercase">Taxa: {exp.taxa_percentual}% | {formatCurrency(exp.valor_original)}</p>
+                    <div className="min-w-0">
+                      <h4 className={`font-bold text-gray-800 text-lg truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
+                        {exp.descricao}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                        Taxa: {exp.taxa_percentual}% | Orig: {formatCurrency(exp.valor_original)}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <span className="font-black text-lg text-gray-900">{formatCurrency(exp.valor_final)}</span>
+
+                  {/* Divisor */}
+                  <div className="h-px w-full bg-gray-100 mb-4"></div>
+
+                  {/* Linha 2: Valor Final e Ações */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xl text-gray-900 tracking-tight">
+                      {formatCurrency(exp.valor_final)}
+                    </span>
                     <div className="flex items-center gap-1">
                       {currentMonth.status === 'ativo' && (
                         <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2"><Pencil size={18} /></button>
-                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2"><Trash2 size={18} /></button>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2 hover:bg-blue-50 rounded-lg">
+                            <Pencil size={18} />
+                          </button>
+                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2 hover:bg-red-50 rounded-lg">
+                            <Trash2 size={18} />
+                          </button>
                         </>
                       )}
                     </div>

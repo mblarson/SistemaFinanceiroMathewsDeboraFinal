@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Trash2, Pencil, X } from 'lucide-react';
+import { TrendingUp, Plus, Trash2, Pencil, X, Calendar } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Revenue as RevenueType } from '../types';
 
@@ -110,32 +110,59 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth }) => {
             <p className="font-bold uppercase tracking-widest text-[10px]">Buscando entradas...</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {revenues.length === 0 ? <p className="text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Nenhuma receita lançada.</p> :
-            revenues.map(rev => (
-              <div key={rev.id} className="flex items-center justify-between p-6 rounded-[2rem] bg-green-50/20 border border-green-50 transition-all hover:shadow-md">
-                <div className="flex items-center gap-4">
-                  <div className="bg-white p-3.5 rounded-2xl text-green-700 shadow-sm">
-                    <TrendingUp size={24} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {revenues.length === 0 ? (
+              <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Nenhuma receita lançada.</p>
+            ) : (
+              revenues.map(rev => (
+                <div key={rev.id} className="flex flex-col p-6 rounded-[2rem] bg-green-50/10 border border-green-50/50 hover:border-green-200 transition-all hover:shadow-md group">
+                  {/* Linha 1: Descrição */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-gray-800 text-lg truncate leading-tight">{rev.descricao}</h4>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Calendar size={10} className="text-gray-400" />
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                          {new Date(rev.data).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-xl text-green-700 shadow-sm shrink-0 border border-green-50">
+                      <TrendingUp size={18} />
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-black text-gray-800 text-lg">{rev.descricao}</h4>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{new Date(rev.data).toLocaleDateString('pt-BR')}</p>
+
+                  {/* Divisor Sutil */}
+                  <div className="h-px w-full bg-green-50/50 mb-4"></div>
+
+                  {/* Linha 2: Valor e Ações */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xl text-green-700 tracking-tight">
+                      {formatCurrency(rev.valor)}
+                    </span>
+                    
+                    <div className="flex items-center gap-1">
+                      {currentMonth.status === 'ativo' && (
+                        <>
+                          <button 
+                            onClick={() => openEditModal(rev)} 
+                            className="text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-all p-2 rounded-lg"
+                          >
+                            <Pencil size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(rev.id)} 
+                            className="text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all p-2 rounded-lg"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <span className="font-black text-2xl text-green-700">{formatCurrency(rev.valor)}</span>
-                  <div className="flex items-center gap-1">
-                    {currentMonth.status === 'ativo' && (
-                      <>
-                        <button onClick={() => openEditModal(rev)} className="text-gray-300 hover:text-blue-600 transition p-2"><Pencil size={20} /></button>
-                        <button onClick={() => handleDelete(rev.id)} className="text-gray-300 hover:text-red-500 transition p-2"><Trash2 size={20} /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>

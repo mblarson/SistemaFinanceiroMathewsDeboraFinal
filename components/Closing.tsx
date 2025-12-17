@@ -28,9 +28,9 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
   };
 
   const closeMonthRoutine = async () => {
-    if (!confirm(`Isso fechará o mês de ${currentMonth.nome} e criará o próximo. Os parcelamentos ativos serão transferidos. Deseja continuar?`)) return;
+    if (!confirm(`Isso fechará o mês de ${currentMonth.nome} e criará o próximo. Os parcelamentos ativos serão transferidos com a parcela incrementada (+1). Deseja continuar?`)) return;
     
-    // 1. Calcular Saldo Final (Receitas - Despesas - Bancos - Pix)
+    // 1. Calcular Saldo Final
     const [r, d, p, b] = await Promise.all([
       supabaseClient.from('receitas').select('valor').eq('mes_id', currentMonth.id),
       supabaseClient.from('despesas_contas').select('valor').eq('mes_id', currentMonth.id),
@@ -47,7 +47,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
     // 2. Atualizar mês atual como fechado
     await supabaseClient.from('meses').update({ status: 'fechado', saldo_final: total }).eq('id', currentMonth.id);
 
-    // 3. Lógica Robusta de Próximo Mês (Virada de Ano)
+    // 3. Lógica Robusta de Próximo Mês (Virada de Ano Garantida)
     const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
     let idx = meses_nomes.indexOf(currentMonth.nome.toUpperCase());
     let nextIdx = idx + 1;
@@ -55,7 +55,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
 
     if (nextIdx > 11) { 
       nextIdx = 0; 
-      nextYear++; // Aqui garantimos 2025 -> 2026
+      nextYear++; // Se era DEZEMBRO/2025, vira JANEIRO/2026
     }
 
     const { data: nextMonth, error: nextMonthError } = await supabaseClient
@@ -69,14 +69,14 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
       return;
     }
 
-    // 4. Migração de Parcelamentos (Parcela + 1)
+    // 4. Migração de Parcelamentos (Somente os pendentes e com Parcela + 1)
     const { data: currentInstallments } = await supabaseClient
       .from('parcelamentos')
       .select('*')
       .eq('mes_id', currentMonth.id);
 
     if (currentInstallments && currentInstallments.length > 0) {
-      // Filtramos apenas quem ainda tem parcelas pendentes
+      // Filtramos apenas quem ainda tem parcelas pendentes (atual < total)
       const pendingInstallments = currentInstallments.filter((inst: Installment) => inst.parcela_atual < inst.total_parcelas);
       
       if (pendingInstallments.length > 0) {
@@ -84,7 +84,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
           mes_id: nextMonth.id,
           descricao: inst.descricao,
           valor_parcela: inst.valor_parcela,
-          parcela_atual: inst.parcela_atual + 1, // Incrementa parcela
+          parcela_atual: inst.parcela_atual + 1, // Herança com incremento de parcela
           total_parcelas: inst.total_parcelas
         }));
 
@@ -92,7 +92,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
       }
     }
     
-    alert(`Ciclo encerrado! Criado ${meses_nomes[nextIdx]}/${nextYear}. Parcelamentos pendentes foram migrados.`);
+    alert(`Ciclo encerrado! Novo mês criado: ${meses_nomes[nextIdx]}/${nextYear}. Parcelamentos herdados com sucesso.`);
     onRefresh();
     fetchMonths();
   };
@@ -110,7 +110,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
             </div>
             <div>
               <h3 className="text-xl font-bold text-red-900">Encerrar Ciclo Mensal</h3>
-              <p className="text-red-700/60 max-w-sm">Ao fechar o mês, você bloqueia novas edições, calcula o saldo final e migra parcelas automáticas para o próximo período.</p>
+              <p className="text-red-700/60 max-w-sm">Ao fechar o mês, o sistema calcula o saldo final, bloqueia edições e cria o próximo mês automaticamente herdando parcelas ativas.</p>
             </div>
           </div>
           <button 

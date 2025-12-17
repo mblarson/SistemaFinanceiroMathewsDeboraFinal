@@ -99,7 +99,7 @@ const App: React.FC = () => {
         </button>
       )}
 
-      {/* Backdrop para fechar o menu ao tocar fora (Escurece a tela) */}
+      {/* Backdrop - Fecha o menu ao tocar em qualquer lugar da tela escurecida */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden animate-in fade-in duration-300"
@@ -185,6 +185,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
+        {/* Clicar no conteúdo principal também fecha o menu lateral se estiver aberto */}
         <div className="max-w-7xl mx-auto" onClick={() => isSidebarOpen && setIsSidebarOpen(false)}>
           {view === 'overview' && <Overview key={`ov-${refreshKey}`} currentMonth={currentMonth} refresh={handleGlobalRefresh} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}`} currentMonth={currentMonth} />}
