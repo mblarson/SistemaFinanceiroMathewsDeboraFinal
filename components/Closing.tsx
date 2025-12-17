@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { LockKeyhole, Unlock, Calendar, TrendingUp } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
-import { Month } from '../types';
+import { Month, Installment } from '../types';
 
 interface ClosingProps {
   currentMonth: Month;
@@ -28,9 +28,9 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
   };
 
   const closeMonthRoutine = async () => {
-    if (!confirm("Isso fechará o mês atual e criará o próximo. Deseja continuar?")) return;
+    if (!confirm(`Isso fechará o mês de ${currentMonth.nome} e criará o próximo. Os parcelamentos ativos serão transferidos. Deseja continuar?`)) return;
     
-    // 1. Calcular Saldo Final
+    // 1. Calcular Saldo Final (Receitas - Despesas - Bancos - Pix)
     const [r, d, p, b] = await Promise.all([
       supabaseClient.from('receitas').select('valor').eq('mes_id', currentMonth.id),
       supabaseClient.from('despesas_contas').select('valor').eq('mes_id', currentMonth.id),
@@ -47,16 +47,52 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
     // 2. Atualizar mês atual como fechado
     await supabaseClient.from('meses').update({ status: 'fechado', saldo_final: total }).eq('id', currentMonth.id);
 
-    // 3. Criar próximo mês
+    // 3. Lógica Robusta de Próximo Mês (Virada de Ano)
     const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
-    let idx = meses_nomes.indexOf(currentMonth.nome);
+    let idx = meses_nomes.indexOf(currentMonth.nome.toUpperCase());
     let nextIdx = idx + 1;
     let nextYear = currentMonth.ano;
-    if (nextIdx > 11) { nextIdx = 0; nextYear++; }
 
-    await supabaseClient.from('meses').insert([{ nome: meses_nomes[nextIdx], ano: nextYear, status: 'ativo' }]);
+    if (nextIdx > 11) { 
+      nextIdx = 0; 
+      nextYear++; // Aqui garantimos 2025 -> 2026
+    }
+
+    const { data: nextMonth, error: nextMonthError } = await supabaseClient
+      .from('meses')
+      .insert([{ nome: meses_nomes[nextIdx], ano: nextYear, status: 'ativo' }])
+      .select()
+      .single();
+
+    if (nextMonthError) {
+      alert("Erro ao criar o próximo mês: " + nextMonthError.message);
+      return;
+    }
+
+    // 4. Migração de Parcelamentos (Parcela + 1)
+    const { data: currentInstallments } = await supabaseClient
+      .from('parcelamentos')
+      .select('*')
+      .eq('mes_id', currentMonth.id);
+
+    if (currentInstallments && currentInstallments.length > 0) {
+      // Filtramos apenas quem ainda tem parcelas pendentes
+      const pendingInstallments = currentInstallments.filter((inst: Installment) => inst.parcela_atual < inst.total_parcelas);
+      
+      if (pendingInstallments.length > 0) {
+        const nextInstallments = pendingInstallments.map((inst: Installment) => ({
+          mes_id: nextMonth.id,
+          descricao: inst.descricao,
+          valor_parcela: inst.valor_parcela,
+          parcela_atual: inst.parcela_atual + 1, // Incrementa parcela
+          total_parcelas: inst.total_parcelas
+        }));
+
+        await supabaseClient.from('parcelamentos').insert(nextInstallments);
+      }
+    }
     
-    alert("Mês fechado com sucesso!");
+    alert(`Ciclo encerrado! Criado ${meses_nomes[nextIdx]}/${nextYear}. Parcelamentos pendentes foram migrados.`);
     onRefresh();
     fetchMonths();
   };
@@ -74,12 +110,12 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
             </div>
             <div>
               <h3 className="text-xl font-bold text-red-900">Encerrar Ciclo Mensal</h3>
-              <p className="text-red-700/60 max-w-sm">Ao fechar o mês, você bloqueia novas edições e inicia o planejamento do próximo período.</p>
+              <p className="text-red-700/60 max-w-sm">Ao fechar o mês, você bloqueia novas edições, calcula o saldo final e migra parcelas automáticas para o próximo período.</p>
             </div>
           </div>
           <button 
             onClick={closeMonthRoutine}
-            className="bg-red-600 text-white px-8 py-3 rounded-full font-bold hover:bg-red-700 transition shadow-lg shadow-red-600/20"
+            className="bg-red-600 text-white px-8 py-3 rounded-full font-bold hover:bg-red-700 transition shadow-lg shadow-red-600/20 active:scale-95"
           >
             Fechar Mês de {currentMonth.nome}
           </button>

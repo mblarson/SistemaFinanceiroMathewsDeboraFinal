@@ -7,7 +7,6 @@ import {
   Banknote, 
   LockKeyhole, 
   Menu, 
-  X,
   Wallet,
   User,
   RefreshCw,
@@ -74,6 +73,7 @@ const App: React.FC = () => {
 
   const handleMonthChange = (month: Month) => {
     setCurrentMonth(month);
+    setIsSidebarOpen(false);
   };
 
   if (loading || !currentMonth) {
@@ -89,17 +89,27 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden text-gray-900">
-      {/* Mobile Menu Button */}
-      <button 
-        className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md lg:hidden"
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-      >
-        {isSidebarOpen ? <X /> : <Menu />}
-      </button>
+      {/* Botão Menu Mobile - Canto Inferior Esquerdo */}
+      {!isSidebarOpen && (
+        <button 
+          className="fixed bottom-6 left-6 z-50 p-4 bg-green-800 text-white rounded-full shadow-2xl lg:hidden active:scale-90 transition-transform"
+          onClick={() => setIsSidebarOpen(true)}
+        >
+          <Menu size={24} />
+        </button>
+      )}
+
+      {/* Backdrop para fechar o menu ao tocar fora (Escurece a tela) */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden animate-in fade-in duration-300"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
+        fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full p-6">
@@ -147,10 +157,10 @@ const App: React.FC = () => {
               {view === 'installments' && 'Parcelamentos'}
               {view === 'closing' && 'Histórico'}
             </h1>
-            <p className="text-gray-500">Ref: {currentMonth.nome} {currentMonth.ano}</p>
+            <p className="text-gray-500 font-medium">Ref: {currentMonth.nome} {currentMonth.ano}</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end sm:self-auto">
             <button 
               onClick={handleGlobalRefresh}
               className="p-2.5 bg-white border border-gray-200 rounded-full text-gray-500 hover:text-green-700 hover:border-green-200 transition-all shadow-sm group"
@@ -175,7 +185,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto" onClick={() => isSidebarOpen && setIsSidebarOpen(false)}>
           {view === 'overview' && <Overview key={`ov-${refreshKey}`} currentMonth={currentMonth} refresh={handleGlobalRefresh} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}`} currentMonth={currentMonth} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}`} currentMonth={currentMonth} />}
