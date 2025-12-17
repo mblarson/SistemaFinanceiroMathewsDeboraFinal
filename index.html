@@ -26,6 +26,9 @@
           },
         },
       }
+      
+      // Proteção contra conflitos de variáveis globais de extensões
+      window.supabaseClient = null;
     </script>
     <script type="importmap">
 {
@@ -43,7 +46,6 @@
 </head>
 <body class="bg-gray-50 text-gray-900">
     <div id="root"></div>
-    <!-- CRITICAL: O script abaixo é o que carrega sua aplicação React -->
     <script type="module" src="index.tsx"></script>
 </body>
 </html>
