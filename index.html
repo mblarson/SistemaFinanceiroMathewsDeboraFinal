@@ -25,7 +25,7 @@
           },
         },
       }
-      // Proteção contra variáveis globais de extensões
+      // Proteção contra variáveis globais de extensões que causam SyntaxError
       window.supabase = null;
       window.supabaseClient = null;
     </script>
@@ -38,7 +38,9 @@
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "lucide-react": "https://esm.sh/lucide-react@0.460.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
