@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Zap, Plus, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, Calendar } from 'lucide-react';
+import { Receipt, Zap, Plus, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Expense, PixExpense } from '../types';
 
@@ -124,84 +124,77 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-6">
-      <div className="flex w-full bg-gray-200/50 p-1 rounded-2xl gap-1">
+    <div className="space-y-4">
+      <div className="flex w-full bg-gray-200/50 p-1 rounded-xl gap-1 max-w-xs mx-auto">
         <button 
           onClick={() => setActiveTab('contas')} 
-          className={`flex-1 py-4 px-2 rounded-xl text-sm font-black transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-md text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-white/30'}`}
+          className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
         >
-          Contas Fixas
+          Fixas
         </button>
         <button 
           onClick={() => setActiveTab('pix')} 
-          className={`flex-1 py-4 px-2 rounded-xl text-sm font-black transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-md text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-white/30'}`}
+          className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
         >
-          Pix Crédito
+          Pix
         </button>
       </div>
 
-      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 lg:p-10">
-        <div className="flex justify-between items-center mb-10">
-          <h3 className="text-2xl font-black flex items-center gap-3 text-gray-900">
-            {activeTab === 'contas' ? <Receipt size={28} className="text-gray-400" /> : <Zap size={28} className="text-yellow-500" />}
-            DESPESAS
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-7">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold flex items-center gap-2 text-gray-900">
+            {activeTab === 'contas' ? <Receipt size={22} className="text-gray-400" /> : <Zap size={22} className="text-yellow-500" />}
+            Despesas
           </h3>
           {currentMonth.status === 'ativo' && (
             <button 
               onClick={() => { setEditingId(null); setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] }); setShowModal(true); }}
-              className="bg-green-800 text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-green-900/20 active:scale-95 transition"
+              className="bg-green-800 text-white px-5 py-2 rounded-full font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition"
             >
-              <Plus size={18} /> Novo
+              <Plus size={14} /> Novo
             </button>
           )}
         </div>
 
         {loading ? (
-          <div className="py-20 flex flex-col items-center gap-4 text-gray-400">
-            <div className="w-10 h-10 border-4 border-green-700 border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-bold uppercase tracking-widest text-[10px]">Sincronizando...</p>
+          <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
+            <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
+            <p className="font-bold uppercase tracking-widest text-[9px]">Sincronizando...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {activeTab === 'contas' ? (
-              expenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Vazio por aqui.</p> :
+              expenses.length === 0 ? <p className="col-span-full text-center py-10 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Vazio.</p> :
               expenses.map(exp => (
-                <div key={exp.id} className={`flex flex-col p-6 rounded-[2rem] border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200 shadow-sm'}`}>
-                  {/* Linha 1: Toggle e Descrição */}
-                  <div className="flex items-start gap-3 mb-4">
+                <div key={exp.id} className={`flex flex-col p-4 rounded-xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-60 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-100 shadow-sm'}`}>
+                  <div className="flex items-start gap-2 mb-3">
                     <button 
                       onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
                       className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
                     >
-                      {exp.pago ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                     </button>
                     <div className="min-w-0">
-                      <h4 className={`font-bold text-gray-800 text-lg truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
+                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
                         {exp.descricao}
                       </h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">
                         {new Date(exp.data).toLocaleDateString('pt-BR')}
                       </p>
                     </div>
                   </div>
 
-                  {/* Divisor */}
-                  <div className="h-px w-full bg-gray-100 mb-4"></div>
+                  <div className="h-px w-full bg-gray-50 mb-3"></div>
 
-                  {/* Linha 2: Valor e Ações */}
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-xl text-gray-900 tracking-tight">
+                    <span className="font-bold text-base text-gray-900 tracking-tight">
                       {formatCurrency(exp.valor)}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       {currentMonth.status === 'ativo' && (
                         <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2 hover:bg-blue-50 rounded-lg">
-                            <Pencil size={18} />
-                          </button>
-                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2 hover:bg-red-50 rounded-lg">
-                            <Trash2 size={18} />
-                          </button>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-1.5"><Pencil size={16} /></button>
+                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 transition p-1.5"><Trash2 size={16} /></button>
                         </>
                       )}
                     </div>
@@ -209,44 +202,37 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
                 </div>
               ))
             ) : (
-              pixExpenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-xs">Sem Pix registrados.</p> :
+              pixExpenses.length === 0 ? <p className="col-span-full text-center py-10 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Vazio.</p> :
               pixExpenses.map(exp => (
-                <div key={exp.id} className={`flex flex-col p-6 rounded-[2rem] border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-50 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-200 shadow-sm'}`}>
-                  {/* Linha 1: Descrição e Taxa */}
-                  <div className="flex items-start gap-3 mb-4">
+                <div key={exp.id} className={`flex flex-col p-4 rounded-xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-60 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-100 shadow-sm'}`}>
+                  <div className="flex items-start gap-2 mb-3">
                     <button 
                       onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
                       className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
                     >
-                      {exp.pago ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                     </button>
                     <div className="min-w-0">
-                      <h4 className={`font-bold text-gray-800 text-lg truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
+                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
                         {exp.descricao}
                       </h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                        Taxa: {exp.taxa_percentual}% | Orig: {formatCurrency(exp.valor_original)}
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">
+                        Taxa: {exp.taxa_percentual}%
                       </p>
                     </div>
                   </div>
 
-                  {/* Divisor */}
-                  <div className="h-px w-full bg-gray-100 mb-4"></div>
+                  <div className="h-px w-full bg-gray-100 mb-3"></div>
 
-                  {/* Linha 2: Valor Final e Ações */}
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-xl text-gray-900 tracking-tight">
+                    <span className="font-bold text-base text-gray-900 tracking-tight">
                       {formatCurrency(exp.valor_final)}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       {currentMonth.status === 'ativo' && (
                         <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-2 hover:bg-blue-50 rounded-lg">
-                            <Pencil size={18} />
-                          </button>
-                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 transition p-2 hover:bg-red-50 rounded-lg">
-                            <Trash2 size={18} />
-                          </button>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-1.5"><Pencil size={16} /></button>
+                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 transition p-1.5"><Trash2 size={16} /></button>
                         </>
                       )}
                     </div>
@@ -259,30 +245,30 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md p-8 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl animate-in slide-in-from-bottom sm:zoom-in duration-300">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-black text-gray-900">{editingId ? 'Editar' : 'Novo Gasto'}</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400"><LucideX /></button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-lg font-bold text-gray-900">{editingId ? 'Editar' : 'Novo Gasto'}</h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400"><LucideX size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2 ml-1 tracking-widest">O que foi comprado?</label>
-                <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-5 outline-none focus:border-green-700 font-bold text-lg" placeholder="Ex: Mercado..." required />
+                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Descrição</label>
+                <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-medium text-sm" placeholder="Mercado..." required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-2 ml-1 tracking-widest">Quanto custou?</label>
-                  <input type="text" inputMode="numeric" value={formData.val} onChange={e => setFormData({...formData, val: maskCurrency(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-5 outline-none focus:border-green-700 font-black text-xl" required />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Valor</label>
+                  <input type="text" inputMode="numeric" value={formData.val} onChange={e => setFormData({...formData, val: maskCurrency(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-sm" required />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase mb-2 ml-1 tracking-widest">Quando?</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-5 outline-none focus:border-green-700 font-bold" required />
+                <div className="min-w-0">
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Data</label>
+                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-medium text-xs" required />
                 </div>
               </div>
-              <div className="flex gap-4 pt-6">
-                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="flex-1 bg-gray-100 text-gray-500 font-black py-5 rounded-2xl uppercase tracking-widest text-xs">Cancelar</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white font-black py-5 rounded-2xl shadow-xl shadow-green-900/20 uppercase tracking-widest text-xs">Salvar</button>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
               </div>
             </form>
           </div>

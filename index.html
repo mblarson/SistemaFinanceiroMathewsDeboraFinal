@@ -13,6 +13,10 @@
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
+        input[type="date"]::-webkit-inner-spin-button,
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+        }
     </style>
     <script>
       window.tailwind = window.tailwind || {};
@@ -25,8 +29,6 @@
           },
         },
       }
-      window.supabase = null;
-      window.supabaseClient = null;
     </script>
     <script type="importmap">
 {
