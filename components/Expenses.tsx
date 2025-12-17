@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Zap, Plus, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
+import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Expense, PixExpense } from '../types';
 
 interface ExpensesProps {
   currentMonth: Month;
+  triggerAdd: number;
 }
 
-const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
+const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const [activeTab, setActiveTab] = useState<'contas' | 'pix'>('contas');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pixExpenses, setPixExpenses] = useState<PixExpense[]>([]);
@@ -22,6 +23,14 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
     fetchPixConfig();
     fetchData();
   }, [currentMonth, activeTab]);
+
+  useEffect(() => {
+    if (triggerAdd > 0) {
+      setEditingId(null);
+      setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+      setShowModal(true);
+    }
+  }, [triggerAdd]);
 
   const fetchPixConfig = async () => {
     const { data } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'taxa_pix').single();
@@ -124,151 +133,122 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth }) => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-4">
-      <div className="flex w-full bg-gray-200/50 p-1 rounded-xl gap-1 max-w-xs mx-auto">
+    <div className="space-y-4 animate-in fade-in duration-300">
+      <div className="flex w-full bg-gray-200/50 p-0.5 rounded-xl gap-0.5 max-w-[200px] mx-auto border border-gray-200">
         <button 
           onClick={() => setActiveTab('contas')} 
-          className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
         >
           Fixas
         </button>
         <button 
           onClick={() => setActiveTab('pix')} 
-          className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
         >
           Pix
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 lg:p-7">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold flex items-center gap-2 text-gray-900">
-            {activeTab === 'contas' ? <Receipt size={22} className="text-gray-400" /> : <Zap size={22} className="text-yellow-500" />}
-            Despesas
-          </h3>
-          {currentMonth.status === 'ativo' && (
-            <button 
-              onClick={() => { setEditingId(null); setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] }); setShowModal(true); }}
-              className="bg-green-800 text-white px-5 py-2 rounded-full font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition"
-            >
-              <Plus size={14} /> Novo
-            </button>
+      {loading ? (
+        <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
+          <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-bold uppercase tracking-widest text-[9px]">Sincronizando...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {activeTab === 'contas' ? (
+            expenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sem despesas fixas.</p> :
+            expenses.map(exp => (
+              <div key={exp.id} className={`bg-white p-4 rounded-2xl border transition-all shadow-sm ${exp.pago ? 'opacity-50 border-transparent bg-gray-50' : 'border-gray-100 hover:border-red-100'}`}>
+                <div className="flex items-start gap-2.5 mb-3">
+                  <button 
+                    onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
+                    className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                  >
+                    {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </button>
+                  <div className="min-w-0">
+                    <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{new Date(exp.data).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-gray-50 mb-3" />
+
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor)}</span>
+                  <div className="flex items-center gap-0.5">
+                    {currentMonth.status === 'ativo' && (
+                      <>
+                        <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
+                        <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            pixExpenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sem despesas via Pix.</p> :
+            pixExpenses.map(exp => (
+              <div key={exp.id} className={`bg-white p-4 rounded-2xl border transition-all shadow-sm ${exp.pago ? 'opacity-50 border-transparent bg-gray-50' : 'border-gray-100 hover:border-yellow-100'}`}>
+                <div className="flex items-start gap-2.5 mb-3">
+                  <button 
+                    onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
+                    className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                  >
+                    {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </button>
+                  <div className="min-w-0">
+                    <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Taxa: {exp.taxa_percentual}%</p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-gray-50 mb-3" />
+
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor_final)}</span>
+                  <div className="flex items-center gap-0.5">
+                    {currentMonth.status === 'ativo' && (
+                      <>
+                        <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
+                        <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
           )}
         </div>
-
-        {loading ? (
-          <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
-            <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-bold uppercase tracking-widest text-[9px]">Sincronizando...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeTab === 'contas' ? (
-              expenses.length === 0 ? <p className="col-span-full text-center py-10 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Vazio.</p> :
-              expenses.map(exp => (
-                <div key={exp.id} className={`flex flex-col p-4 rounded-xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-60 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-100 shadow-sm'}`}>
-                  <div className="flex items-start gap-2 mb-3">
-                    <button 
-                      onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
-                      className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
-                    >
-                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                    </button>
-                    <div className="min-w-0">
-                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
-                        {exp.descricao}
-                      </h4>
-                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">
-                        {new Date(exp.data).toLocaleDateString('pt-BR')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="h-px w-full bg-gray-50 mb-3"></div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-base text-gray-900 tracking-tight">
-                      {formatCurrency(exp.valor)}
-                    </span>
-                    <div className="flex items-center gap-0.5">
-                      {currentMonth.status === 'ativo' && (
-                        <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-1.5"><Pencil size={16} /></button>
-                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 transition p-1.5"><Trash2 size={16} /></button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              pixExpenses.length === 0 ? <p className="col-span-full text-center py-10 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Vazio.</p> :
-              pixExpenses.map(exp => (
-                <div key={exp.id} className={`flex flex-col p-4 rounded-xl border transition-all ${exp.pago ? 'bg-gray-50 border-transparent opacity-60 scale-[0.98]' : 'bg-white border-gray-100 hover:border-green-100 shadow-sm'}`}>
-                  <div className="flex items-start gap-2 mb-3">
-                    <button 
-                      onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
-                      className={`transition shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
-                    >
-                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                    </button>
-                    <div className="min-w-0">
-                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>
-                        {exp.descricao}
-                      </h4>
-                      <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">
-                        Taxa: {exp.taxa_percentual}%
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="h-px w-full bg-gray-100 mb-3"></div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-base text-gray-900 tracking-tight">
-                      {formatCurrency(exp.valor_final)}
-                    </span>
-                    <div className="flex items-center gap-0.5">
-                      {currentMonth.status === 'ativo' && (
-                        <>
-                          <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 transition p-1.5"><Pencil size={16} /></button>
-                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 transition p-1.5"><Trash2 size={16} /></button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm p-6 rounded-2xl shadow-2xl animate-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="text-lg font-bold text-gray-900">{editingId ? 'Editar' : 'Novo Gasto'}</h2>
+          <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-2xl animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">{editingId ? 'Editar' : 'Novo Gasto'}</h2>
               <button onClick={() => setShowModal(false)} className="text-gray-400"><LucideX size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Descrição</label>
-                <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-medium text-sm" placeholder="Mercado..." required />
+                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Descrição</label>
+                <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-sm" placeholder="Mercado, Net..." required />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Valor</label>
-                  <input type="text" inputMode="numeric" value={formData.val} onChange={e => setFormData({...formData, val: maskCurrency(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-sm" required />
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Valor</label>
+                  <input type="text" inputMode="numeric" value={formData.val} onChange={e => setFormData({...formData, val: maskCurrency(e.target.value)})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-black text-sm" required />
                 </div>
                 <div className="min-w-0">
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 tracking-widest">Data</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-medium text-xs" required />
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Data</label>
+                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-xs" required />
                 </div>
               </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
+              <div className="flex gap-3 pt-3">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>
+                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
               </div>
             </form>
           </div>

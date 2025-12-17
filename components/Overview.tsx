@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { TrendingDown, TrendingUp, Wallet, ArrowRight, History, CalendarDays } from 'lucide-react';
+import { TrendingDown, TrendingUp, Wallet, History, CalendarDays } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month } from '../types';
 
@@ -21,26 +21,28 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Recuperar Totais
       const [receitasRes, despesasRes, pixRes, bancosRes] = await Promise.all([
         supabaseClient.from('receitas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id),
-        supabaseClient.from('despesas_contas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id),
-        supabaseClient.from('despesas_pix_credito').select('valor_final, descricao, data, criado_em').eq('mes_id', currentMonth.id),
-        supabaseClient.from('banco_despesas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id)
+        supabaseClient.from('despesas_contas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
+        supabaseClient.from('despesas_pix_credito').select('valor_final, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
+        supabaseClient.from('banco_despesas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id)
       ]);
 
       const rev = receitasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
-      const exp = (despesasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0) +
-                  (pixRes.data?.reduce((acc, curr) => acc + curr.valor_final, 0) || 0) +
-                  (bancosRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0);
+      
+      // LOGICA SOLICITADA: Contabilizar apenas despesas PAGAS
+      const expContas = despesasRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
+      const expPix = pixRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
+      const expBancos = bancosRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
+
+      const totalExpPagas = expContas + expPix + expBancos;
 
       setTotals({
         revenue: rev,
-        expenses: exp,
-        balance: rev - exp
+        expenses: totalExpPagas,
+        balance: rev - totalExpPagas
       });
 
-      // Recuperar Lançamentos Recentes (Unificando as tabelas para histórico)
       const allItems = [
         ...(receitasRes.data || []).map(i => ({ ...i, type: 'revenue' })),
         ...(despesasRes.data || []).map(i => ({ ...i, type: 'expense' })),
@@ -60,101 +62,92 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-4">
-      <div className="h-10 w-10 border-4 border-green-700 border-t-transparent rounded-full animate-spin"></div>
-      <p className="font-medium">Recuperando saldos do banco...</p>
+    <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+      <div className="h-8 w-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-xs font-bold uppercase tracking-widest">Sincronizando Saldos...</p>
     </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-green-900 text-white p-8 rounded-[2rem] shadow-xl relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 bg-white/10 p-12 rounded-full transition-transform group-hover:scale-110"></div>
-          <p className="text-green-100/70 font-medium mb-1 flex items-center gap-2">
-            <Wallet size={16} /> Saldo Líquido
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-green-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 bg-white/5 p-10 rounded-full"></div>
+          <p className="text-green-200/60 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+            <Wallet size={12} /> Saldo Real (Líquido)
           </p>
-          <h2 className="text-4xl font-bold tracking-tight">{formatCurrency(totals.balance)}</h2>
-          <p className="mt-4 text-sm text-green-100/50">Disponível no período de {currentMonth.nome}</p>
+          <h2 className="text-3xl font-black tracking-tighter">{formatCurrency(totals.balance)}</h2>
+          <p className="mt-2 text-[9px] text-green-100/40 uppercase font-bold tracking-wider">Apenas Despesas Pagas</p>
         </div>
 
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-between">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
           <div className="flex justify-between items-start">
-            <div className="bg-green-100 p-3 rounded-2xl text-green-700">
-              <TrendingUp size={24} />
+            <div className="bg-green-50 p-2 rounded-xl text-green-600 border border-green-100">
+              <TrendingUp size={18} />
             </div>
-            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md">Entradas</span>
           </div>
           <div className="mt-4">
-            <p className="text-gray-400 text-sm font-medium">Total Receitas</p>
-            <h2 className="text-2xl font-bold">{formatCurrency(totals.revenue)}</h2>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Entradas Totais</p>
+            <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.revenue)}</h2>
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-between">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
           <div className="flex justify-between items-start">
-            <div className="bg-red-100 p-3 rounded-2xl text-red-600">
-              <TrendingDown size={24} />
+            <div className="bg-red-50 p-2 rounded-xl text-red-600 border border-red-100">
+              <TrendingDown size={18} />
             </div>
-            <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md">Saídas</span>
           </div>
           <div className="mt-4">
-            <p className="text-gray-400 text-sm font-medium">Total Despesas</p>
-            <h2 className="text-2xl font-bold">{formatCurrency(totals.expenses)}</h2>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Saídas Efetivadas</p>
+            <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.expenses)}</h2>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lançamentos Recentes */}
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <History className="text-gray-400" size={20} />
-              Recuperados Recentemente
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
+              <History className="text-gray-400" size={16} />
+              Lançamentos Recentes
             </h3>
-            <span className="text-xs font-bold text-gray-400 uppercase">Últimos 5</span>
           </div>
-          <div className="space-y-3">
-            {recentTransactions.length === 0 ? (
-              <p className="text-center py-10 text-gray-400">Nenhum lançamento encontrado.</p>
-            ) : (
-              recentTransactions.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-gray-50/50 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${item.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {item.type === 'revenue' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">{item.descricao}</p>
-                      <p className="text-[10px] text-gray-400 uppercase font-bold">{new Date(item.data).toLocaleDateString('pt-BR')}</p>
-                    </div>
+          <div className="space-y-2">
+            {recentTransactions.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className={`p-1.5 rounded-lg ${item.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {item.type === 'revenue' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                   </div>
-                  <span className={`text-sm font-bold ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
-                    {item.type === 'revenue' ? '+' : '-'} {formatCurrency(item.valor)}
-                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-gray-700">{item.descricao}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(item.data).toLocaleDateString('pt-BR')}</p>
+                  </div>
                 </div>
-              ))
-            )}
+                <span className={`text-xs font-black ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
+                   {formatCurrency(item.valor)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Info Extra */}
-        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-            <CalendarDays size={20} className="text-gray-400" />
-            Informações do Período
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
+          <h3 className="text-sm font-bold mb-5 flex items-center gap-2 text-gray-800">
+            <CalendarDays size={16} className="text-gray-400" />
+            Info de Conexão
           </h3>
-          <div className="flex-1 flex flex-col justify-center space-y-4">
+          <div className="space-y-3">
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-              <p className="text-xs font-bold text-blue-800 uppercase mb-1">Status da Base</p>
-              <p className="text-sm text-blue-900/70">O sistema está conectado ao banco de dados em tempo real. Todas as alterações são salvas automaticamente.</p>
+              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Dica de Gestão</p>
+              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">As despesas em aberto servem como previsão e não afetam o saldo real até serem liquidadas.</p>
             </div>
             <button 
               onClick={refresh}
-              className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-bold py-4 rounded-2xl hover:bg-black transition shadow-lg shadow-gray-900/20"
+              className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest"
             >
-              Forçar Recarregamento Total
+              Sincronizar Banco
             </button>
           </div>
         </div>
