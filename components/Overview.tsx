@@ -30,17 +30,18 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
 
       const rev = receitasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
       
-      // LOGICA SOLICITADA: Contabilizar apenas despesas PAGAS
-      const expContas = despesasRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
-      const expPix = pixRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
-      const expBancos = bancosRes.data?.filter(i => i.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
+      // LOGICA ALTERADA: Contabilizar TODAS as despesas (pagas ou não)
+      // O usuário solicitou que despesas em aberto já afetem o saldo real.
+      const expContas = despesasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
+      const expPix = pixRes.data?.reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
+      const expBancos = bancosRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
 
-      const totalExpPagas = expContas + expPix + expBancos;
+      const totalExp = expContas + expPix + expBancos;
 
       setTotals({
         revenue: rev,
-        expenses: totalExpPagas,
-        balance: rev - totalExpPagas
+        expenses: totalExp,
+        balance: rev - totalExp
       });
 
       const allItems = [
@@ -77,7 +78,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             <Wallet size={12} /> Saldo Real (Líquido)
           </p>
           <h2 className="text-3xl font-black tracking-tighter">{formatCurrency(totals.balance)}</h2>
-          <p className="mt-2 text-[9px] text-green-100/40 uppercase font-bold tracking-wider">Apenas Despesas Pagas</p>
+          <p className="mt-2 text-[9px] text-green-100/40 uppercase font-bold tracking-wider">Considerando Pendências</p>
         </div>
 
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
@@ -99,7 +100,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             </div>
           </div>
           <div className="mt-4">
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Saídas Efetivadas</p>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Saídas Totais</p>
             <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.expenses)}</h2>
           </div>
         </div>
@@ -140,8 +141,8 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </h3>
           <div className="space-y-3">
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Dica de Gestão</p>
-              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">As despesas em aberto servem como previsão e não afetam o saldo real até serem liquidadas.</p>
+              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Status do Saldo</p>
+              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">Todas as despesas, inclusive as em aberto, estão sendo subtraídas do saldo para uma visão realista.</p>
             </div>
             <button 
               onClick={refresh}

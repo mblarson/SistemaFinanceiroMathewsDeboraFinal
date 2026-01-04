@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Trash2, Pencil, X, Calendar } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
@@ -95,6 +94,8 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const canEdit = currentMonth.status !== 'fechado';
+
   return (
     <div className="animate-in fade-in duration-300">
       {loading ? (
@@ -124,7 +125,7 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
                 <div className="flex items-center justify-between">
                   <span className="font-black text-base text-green-700 tracking-tight">{formatCurrency(rev.valor)}</span>
                   <div className="flex items-center gap-0.5">
-                    {currentMonth.status === 'ativo' && (
+                    {canEdit && (
                       <>
                         <button onClick={() => openEditModal(rev)} className="text-gray-300 hover:text-blue-600 p-1.5 transition-colors"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete(rev.id)} className="text-gray-300 hover:text-red-500 p-1.5 transition-colors"><Trash2 size={16} /></button>

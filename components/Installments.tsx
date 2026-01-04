@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
@@ -93,6 +92,8 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     fetchData();
   };
 
+  const canEdit = currentMonth.status !== 'fechado';
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       {loading ? (
@@ -125,7 +126,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Progress: {pAtual}/{pTotal}</p>
                       </div>
                     </div>
-                    {currentMonth.status === 'ativo' && (
+                    {canEdit && (
                       <div className="flex items-center">
                         <button onClick={() => openEditModal(item)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
                         {confirmDeleteId === item.id ? (

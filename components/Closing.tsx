@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
-import { LockKeyhole, Unlock, Calendar, TrendingUp } from 'lucide-react';
+import { LockKeyhole, Unlock, Calendar, TrendingUp, CalendarPlus, ChevronRight } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
-import { Month, Installment } from '../types';
+import { Month, MonthStatus } from '../types';
 
 interface ClosingProps {
   currentMonth: Month;
@@ -19,23 +18,55 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
   }, []);
 
   const fetchMonths = async () => {
-    const { data } = await supabaseClient
-      .from('meses')
-      .select('*')
-      .order('criado_em', { ascending: false });
-    setMonths(data || []);
-    setLoading(false);
+    setLoading(true);
+    try {
+      let { data: allMonths, error } = await supabaseClient
+        .from('meses')
+        .select('*')
+        .order('ano', { ascending: false });
+
+      if (error || !allMonths) {
+        setMonths([]);
+        setLoading(false);
+        return;
+      }
+
+      // Ordenação: Ativo Primeiro, Provisionamento Segundo, Fechados Depois (Cronológico)
+      const statusOrder: Record<MonthStatus, number> = { 'ativo': 1, 'provisionamento': 2, 'fechado': 3 };
+      const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+      
+      const sortedMonths = [...allMonths].sort((a, b) => {
+        const statusA = statusOrder[a.status] || 99;
+        const statusB = statusOrder[b.status] || 99;
+
+        if (statusA !== statusB) return statusA - statusB;
+
+        if (a.ano !== b.ano) return b.ano - a.ano;
+        return meses_nomes.indexOf(b.nome.toUpperCase()) - meses_nomes.indexOf(a.nome.toUpperCase());
+      });
+
+      setMonths(sortedMonths);
+    } catch (err) {
+      console.error("Erro ao carregar histórico:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeMonthRoutine = async () => {
-    if (!confirm(`Isso fechará o mês de ${currentMonth.nome} e criará o próximo. Os parcelamentos ativos serão transferidos com a parcela incrementada (+1). Deseja continuar?`)) return;
+    if (currentMonth.status !== 'ativo') {
+      alert("Apenas o mês ativo pode ser encerrado.");
+      return;
+    }
+
+    if (!confirm(`Deseja encerrar ${currentMonth.nome}/${currentMonth.ano}? Esta ação é irreversível e bloqueará edições.`)) return;
     
-    // 1. Calcular Saldo Final
+    // Cálculo do Saldo Final para Registro Histórico
     const [r, d, p, b] = await Promise.all([
       supabaseClient.from('receitas').select('valor').eq('mes_id', currentMonth.id),
-      supabaseClient.from('despesas_contas').select('valor').eq('mes_id', currentMonth.id),
-      supabaseClient.from('despesas_pix_credito').select('valor_final').eq('mes_id', currentMonth.id),
-      supabaseClient.from('banco_despesas').select('valor').eq('mes_id', currentMonth.id)
+      supabaseClient.from('despesas_contas').select('valor').eq('mes_id', currentMonth.id).eq('pago', true),
+      supabaseClient.from('despesas_pix_credito').select('valor_final').eq('mes_id', currentMonth.id).eq('pago', true),
+      supabaseClient.from('banco_despesas').select('valor').eq('mes_id', currentMonth.id).eq('pago', true)
     ]);
     
     const rev = r.data?.reduce((a,c) => a + c.valor, 0) || 0;
@@ -44,55 +75,30 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
                 (b.data?.reduce((a,c) => a + c.valor, 0) || 0);
     const total = rev - exp;
 
-    // 2. Atualizar mês atual como fechado
+    // 1. Fecha o mês atual
     await supabaseClient.from('meses').update({ status: 'fechado', saldo_final: total }).eq('id', currentMonth.id);
 
-    // 3. Lógica Robusta de Próximo Mês (Virada de Ano Garantida)
+    // 2. Busca e Ativa o mês de planejamento (Jan/2026 se for Dez/2025)
     const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
     let idx = meses_nomes.indexOf(currentMonth.nome.toUpperCase());
-    let nextIdx = idx + 1;
-    let nextYear = currentMonth.ano;
-
-    if (nextIdx > 11) { 
-      nextIdx = 0; 
-      nextYear++; // Se era DEZEMBRO/2025, vira JANEIRO/2026
-    }
-
-    const { data: nextMonth, error: nextMonthError } = await supabaseClient
+    let nextIdx = (idx + 1) % 12;
+    let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+    const nextMonthName = meses_nomes[nextIdx];
+    
+    const { data: nextMonthData } = await supabaseClient
       .from('meses')
-      .insert([{ nome: meses_nomes[nextIdx], ano: nextYear, status: 'ativo' }])
-      .select()
+      .select('*')
+      .eq('nome', nextMonthName)
+      .eq('ano', nextYear)
       .single();
 
-    if (nextMonthError) {
-      alert("Erro ao criar o próximo mês: " + nextMonthError.message);
-      return;
-    }
-
-    // 4. Migração de Parcelamentos (Somente os pendentes e com Parcela + 1)
-    const { data: currentInstallments } = await supabaseClient
-      .from('parcelamentos')
-      .select('*')
-      .eq('mes_id', currentMonth.id);
-
-    if (currentInstallments && currentInstallments.length > 0) {
-      // Filtramos apenas quem ainda tem parcelas pendentes (atual < total)
-      const pendingInstallments = currentInstallments.filter((inst: Installment) => inst.parcela_atual < inst.total_parcelas);
-      
-      if (pendingInstallments.length > 0) {
-        const nextInstallments = pendingInstallments.map((inst: Installment) => ({
-          mes_id: nextMonth.id,
-          descricao: inst.descricao,
-          valor_parcela: inst.valor_parcela,
-          parcela_atual: inst.parcela_atual + 1, // Herança com incremento de parcela
-          total_parcelas: inst.total_parcelas
-        }));
-
-        await supabaseClient.from('parcelamentos').insert(nextInstallments);
-      }
+    if (nextMonthData) {
+      // Ativa o próximo mês. 
+      // REGRA WHITE LABEL: Não clonamos nada. O próximo mês deve estar vazio/zerado.
+      await supabaseClient.from('meses').update({ status: 'ativo' }).eq('id', nextMonthData.id);
     }
     
-    alert(`Ciclo encerrado! Novo mês criado: ${meses_nomes[nextIdx]}/${nextYear}. Parcelamentos herdados com sucesso.`);
+    alert(`Mês de ${currentMonth.nome} encerrado. O novo ciclo começou.`);
     onRefresh();
     fetchMonths();
   };
@@ -101,59 +107,86 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
+      {/* Ação de Fechamento (Apenas no contexto ativo) */}
       {currentMonth.status === 'ativo' && (
-        <div className="bg-red-50 border border-red-100 p-8 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="bg-red-100 p-4 rounded-full text-red-700">
+        <div className="bg-gray-900 p-8 sm:p-12 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
+          <div className="flex items-center gap-6 text-white">
+            <div className="bg-white/10 p-5 rounded-3xl backdrop-blur-sm border border-white/5">
               <LockKeyhole size={32} />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-red-900">Encerrar Ciclo Mensal</h3>
-              <p className="text-red-700/60 max-w-sm">Ao fechar o mês, o sistema calcula o saldo final, bloqueia edições e cria o próximo mês automaticamente herdando parcelas ativas.</p>
+              <h3 className="text-2xl font-black uppercase tracking-tighter leading-none mb-2">Encerrar Ciclo</h3>
+              <p className="text-white/40 text-xs font-bold uppercase tracking-widest max-w-xs">Finaliza {currentMonth.nome} e ativa o planejamento como novo ciclo real.</p>
             </div>
           </div>
           <button 
             onClick={closeMonthRoutine}
-            className="bg-red-600 text-white px-8 py-3 rounded-full font-bold hover:bg-red-700 transition shadow-lg shadow-red-600/20 active:scale-95"
+            className="w-full md:w-auto bg-white text-gray-900 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition shadow-xl active:scale-95"
           >
-            Fechar Mês de {currentMonth.nome}
+            Fechar Mês Agora
           </button>
         </div>
       )}
 
-      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
-        <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-          <Calendar className="text-gray-400" />
-          Histórico de Meses
+      {/* Grid de Histórico */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8 lg:p-12">
+        <h3 className="text-xl font-black mb-10 flex items-center gap-3 text-gray-800">
+          <Calendar className="text-gray-400" size={24} />
+          ARQUIVO MENSAL
         </h3>
 
-        {loading ? <p className="text-center py-10">Carregando histórico...</p> : (
+        {loading ? (
+          <div className="py-24 flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-4 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Varrendo Registros...</p>
+          </div>
+        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {months.map(m => (
-              <div key={m.id} className="p-6 rounded-2xl border border-gray-100 bg-gray-50/30 flex items-center justify-between group hover:border-green-200 transition">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl ${m.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {m.status === 'ativo' ? <Unlock size={20} /> : <LockKeyhole size={20} />}
+              <div 
+                key={m.id} 
+                className={`p-6 rounded-[1.8rem] border flex items-center justify-between transition-all group ${
+                  m.status === 'ativo' ? 'bg-green-50/20 border-green-100' :
+                  m.status === 'provisionamento' ? 'bg-blue-50/20 border-blue-100' :
+                  'bg-gray-50/30 border-gray-100 hover:border-gray-200'
+                }`}
+              >
+                <div className="flex items-center gap-5">
+                  <div className={`p-4 rounded-2xl shadow-sm ${
+                      m.status === 'ativo' ? 'bg-green-600 text-white' :
+                      m.status === 'provisionamento' ? 'bg-blue-600 text-white' :
+                      'bg-white text-gray-300 border border-gray-100'}`
+                  }>
+                    {m.status === 'ativo' ? <Unlock size={20} /> :
+                     m.status === 'provisionamento' ? <CalendarPlus size={20} /> :
+                     <LockKeyhole size={20} />}
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-800 uppercase tracking-tight">{m.nome} / {m.ano}</h4>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${m.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
-                      {m.status}
+                    <h4 className="font-black text-gray-900 text-base uppercase tracking-tight">{m.nome} {m.ano}</h4>
+                    <span className={`text-[9px] font-black uppercase tracking-[0.15em] px-2.5 py-1 rounded-lg ${
+                        m.status === 'ativo' ? 'bg-green-100 text-green-700' :
+                        m.status === 'provisionamento' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-200 text-gray-500'}`
+                    }>
+                      {m.status === 'provisionamento' ? 'Planejamento' : m.status}
                     </span>
                   </div>
                 </div>
+                
                 <div className="text-right">
                   {m.status === 'fechado' ? (
-                    <p className="text-lg font-bold text-gray-900">{formatCurrency(m.saldo_final)}</p>
+                    <p className="text-base font-black text-gray-900 tracking-tighter">{formatCurrency(m.saldo_final)}</p>
                   ) : (
-                    <p className="text-xs text-gray-400 font-medium">Em andamento</p>
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                      {m.status === 'ativo' ? 'Contexto Real' : 'Fluxo Futuro'}
+                    </p>
                   )}
                   <button 
                     onClick={() => onSelectMonth(m)}
-                    className="mt-1 text-xs font-bold text-green-700 hover:underline flex items-center gap-1 ml-auto"
+                    className="mt-2 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ml-auto text-gray-900 hover:gap-2 transition-all"
                   >
-                    Visualizar <TrendingUp size={12} />
+                    ACESSAR <ChevronRight size={14} />
                   </button>
                 </div>
               </div>

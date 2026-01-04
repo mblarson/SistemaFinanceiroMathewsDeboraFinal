@@ -1,5 +1,5 @@
 
-export type MonthStatus = 'ativo' | 'fechado';
+export type MonthStatus = 'ativo' | 'fechado' | 'provisionamento';
 
 export interface Month {
   id: number;

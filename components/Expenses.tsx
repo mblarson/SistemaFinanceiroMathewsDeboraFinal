@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
@@ -132,6 +131,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const canEdit = currentMonth.status !== 'fechado';
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       <div className="flex w-full bg-gray-200/50 p-0.5 rounded-xl gap-0.5 max-w-[200px] mx-auto border border-gray-200">
@@ -164,6 +165,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   <button 
                     onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
                     className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                    disabled={!canEdit}
                   >
                     {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                   </button>
@@ -178,7 +180,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 <div className="flex items-center justify-between">
                   <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor)}</span>
                   <div className="flex items-center gap-0.5">
-                    {currentMonth.status === 'ativo' && (
+                    {canEdit && (
                       <>
                         <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
@@ -196,6 +198,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   <button 
                     onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
                     className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                    disabled={!canEdit}
                   >
                     {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                   </button>
@@ -210,7 +213,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 <div className="flex items-center justify-between">
                   <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor_final)}</span>
                   <div className="flex items-center gap-0.5">
-                    {currentMonth.status === 'ativo' && (
+                    {canEdit && (
                       <>
                         <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
                         <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>

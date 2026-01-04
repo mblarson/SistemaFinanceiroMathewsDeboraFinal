@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Banknote, Plus, ChevronRight, ArrowLeft, Trash2, CheckCircle2, Circle, Save, Info, X as LucideX } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
@@ -6,9 +5,10 @@ import { Month, Bank, BankExpense } from '../types';
 
 interface BanksProps {
   currentMonth: Month;
+  triggerAdd: number;
 }
 
-const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
+const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [bankExpenses, setBankExpenses] = useState<BankExpense[]>([]);
@@ -26,6 +26,13 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
   useEffect(() => {
     fetchBanks();
   }, []);
+
+  useEffect(() => {
+    if (triggerAdd > 0 && !selectedBank) {
+      setBankForm({ nome: '', cor: '#15803d' });
+      setShowBankModal(true);
+    }
+  }, [triggerAdd]);
 
   useEffect(() => {
     if (selectedBank) {
@@ -174,6 +181,8 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const canEdit = currentMonth.status !== 'fechado';
+
   if (selectedBank) {
     const total = bankExpenses.reduce((acc, curr) => acc + curr.valor, 0);
     const isSpecial = selectedBank.nome === 'American Express' || selectedBank.nome === 'BB';
@@ -195,7 +204,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
                 <p className="text-sm text-gray-500 font-bold uppercase tracking-widest">{formatCurrency(total)}</p>
               </div>
             </div>
-            {!isSpecial && currentMonth.status === 'ativo' && (
+            {!isSpecial && canEdit && (
               <button onClick={() => setShowExpenseModal(true)} className="w-full sm:w-auto bg-green-800 text-white px-6 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg">
                 <Plus size={20} /> Novo Lançamento
               </button>
@@ -219,13 +228,13 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
                       value={specialFields[f]} 
                       onChange={e => setSpecialFields({...specialFields, [f]: maskCurrency(e.target.value)})}
                       className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-5 outline-none focus:border-green-700 font-black text-2xl text-gray-800 transition"
-                      disabled={currentMonth.status === 'fechado'}
+                      disabled={!canEdit}
                     />
                   </div>
                 ))}
               </div>
 
-              {currentMonth.status === 'ativo' && (
+              {canEdit && (
                 <button onClick={handleSaveSpecial} disabled={saving} className="w-full bg-green-800 text-white font-black py-6 rounded-2xl shadow-2xl hover:bg-green-900 transition flex items-center justify-center gap-3 mt-10">
                   {saving ? <div className="h-6 w-6 animate-spin rounded-full border-3 border-white border-t-transparent" /> : <Save size={24} />}
                   Salvar {selectedBank.nome}
@@ -253,7 +262,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
                     </div>
                     <div className="flex items-center gap-6">
                       <span className="font-black text-lg text-gray-900">{formatCurrency(exp.valor)}</span>
-                      {currentMonth.status === 'ativo' && (
+                      {canEdit && (
                         <button onClick={() => handleDeleteExpense(exp.id)} className="text-gray-300 hover:text-red-500 transition-colors p-2">
                           <Trash2 size={20} />
                         </button>
@@ -268,7 +277,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
 
         {showExpenseModal && (
           <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-md p-8 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-bottom sm:zoom-in duration-300">
+            <div className="bg-white w-full max-md p-8 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-bottom sm:zoom-in duration-300">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-2xl font-black text-gray-900">Novo Gasto</h2>
                 <button onClick={() => setShowExpenseModal(false)} className="text-gray-400"><LucideX /></button>
@@ -304,7 +313,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-center px-2">
         <h3 className="text-xl font-black text-gray-900">Controle de Cartões</h3>
-        {currentMonth.status === 'ativo' && (
+        {canEdit && (
           <button onClick={() => setShowBankModal(true)} className="bg-green-800 text-white px-5 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg">
             <Plus size={16} /> Adicionar
           </button>
@@ -332,7 +341,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth }) => {
                 </div>
               </div>
 
-              {currentMonth.status === 'ativo' && (
+              {canEdit && (
                 <div className="absolute top-6 right-6 z-30">
                   {confirmDeleteId === bank.id ? (
                     <div className="flex items-center gap-2 bg-red-600 text-white p-1 rounded-full shadow-2xl animate-in zoom-in duration-200 border-2 border-white">
