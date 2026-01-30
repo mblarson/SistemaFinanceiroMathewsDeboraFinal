@@ -175,6 +175,7 @@ const App: React.FC = () => {
 
   const handleNavigate = (newView: string) => {
     setView(newView);
+    setTriggerAdd(0); // Reseta gatilhos de adição ao navegar entre menus
     setIsSidebarOpen(false);
   };
 
@@ -184,6 +185,7 @@ const App: React.FC = () => {
     }
     // White Label Reset: Força a limpeza de todo o estado mudando a key dos componentes
     setCurrentContextMonth(month);
+    setTriggerAdd(0); // Reseta gatilhos de adição ao trocar o contexto mensal
     setRefreshKey(prev => prev + 1);
   };
 
