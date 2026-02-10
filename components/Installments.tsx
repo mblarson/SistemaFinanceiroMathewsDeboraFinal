@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
@@ -106,15 +107,15 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
           {installments.length === 0 ? (
             <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
               <CalendarClock size={32} className="mb-2 opacity-20" />
-              <p className="font-bold uppercase tracking-widest text-[10px]">Sem parcelas ativas</p>
+              <p className="font-bold uppercase tracking-widest text-[10px]">Sem parcelamentos para {currentMonth.nome}</p>
             </div>
           ) : (
             installments.map(item => {
               const pAtual = item.parcela_atual ?? 1;
               const pTotal = item.total_parcelas ?? 1;
               const pValor = item.valor_parcela ?? 0;
-              const parcelasPendentes = Math.max(0, (pTotal - pAtual + 1));
-              const totalQuitacao = pValor * parcelasPendentes;
+              const parcelasPendentes = Math.max(0, (pTotal - pAtual));
+              const totalQuitacao = pValor * (parcelasPendentes + 1);
 
               return (
                 <div key={item.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col">
@@ -123,7 +124,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                       <div className="bg-blue-50 p-2 rounded-xl text-blue-600 shrink-0"><CalendarClock size={18} /></div>
                       <div className="min-w-0">
                         <h4 className="font-bold text-gray-800 text-sm truncate">{item.descricao}</h4>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Progress: {pAtual}/{pTotal}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Pagas: {pAtual}/{pTotal}</p>
                       </div>
                     </div>
                     {canEdit && (
@@ -150,7 +151,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                   </div>
 
                   <div className="mt-auto bg-green-800 p-4 rounded-2xl text-white">
-                    <p className="text-[8px] font-bold text-green-200 uppercase tracking-widest mb-0.5">Quitação Total</p>
+                    <p className="text-[8px] font-bold text-green-200 uppercase tracking-widest mb-0.5">Total para Quitação</p>
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-black tracking-tight">{formatCurrency(totalQuitacao)}</span>
                       <Wallet size={16} className="opacity-30" />
@@ -191,7 +192,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               </div>
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-2">
                 <Info size={14} className="text-blue-600 shrink-0" />
-                <p className="text-[9px] font-bold text-blue-800 leading-tight uppercase">O sistema gerencia automaticamente a progressão das parcelas ao fechar o mês.</p>
+                <p className="text-[9px] font-bold text-blue-800 leading-tight uppercase">O sistema atualiza a progressão das parcelas automaticamente ao encerrar o mês.</p>
               </div>
               <div className="flex gap-3 pt-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>

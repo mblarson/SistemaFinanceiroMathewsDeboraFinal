@@ -21,6 +21,8 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Busca apenas Receitas e Despesas Reais (Contas, Pix e Cartões)
+      // O menu PARCELAS é independente e não entra neste cálculo.
       const [receitasRes, despesasRes, pixRes, bancosRes] = await Promise.all([
         supabaseClient.from('receitas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id),
         supabaseClient.from('despesas_contas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
@@ -30,8 +32,6 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
 
       const rev = receitasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
       
-      // LOGICA ALTERADA: Contabilizar TODAS as despesas (pagas ou não)
-      // O usuário solicitou que despesas em aberto já afetem o saldo real.
       const expContas = despesasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
       const expPix = pixRes.data?.reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
       const expBancos = bancosRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
@@ -53,7 +53,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
 
       setRecentTransactions(allItems.slice(0, 5));
     } catch (err) {
-      console.error("Erro ao recuperar dados:", err);
+      console.error("Erro ao recuperar dados financeiros:", err);
     } finally {
       setLoading(false);
     }
@@ -65,20 +65,20 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
       <div className="h-8 w-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-xs font-bold uppercase tracking-widest">Sincronizando Saldos...</p>
+      <p className="text-xs font-bold uppercase tracking-widest">Calculando Balanço...</p>
     </div>
   );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-green-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+        <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
           <div className="absolute -right-4 -top-4 bg-white/5 p-10 rounded-full"></div>
-          <p className="text-green-200/60 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
-            <Wallet size={12} /> Saldo Real (Líquido)
+          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+            <Wallet size={12} className="text-green-500" /> Saldo Real (Líquido)
           </p>
           <h2 className="text-3xl font-black tracking-tighter">{formatCurrency(totals.balance)}</h2>
-          <p className="mt-2 text-[9px] text-green-100/40 uppercase font-bold tracking-wider">Considerando Pendências</p>
+          <p className="mt-2 text-[9px] text-white/30 uppercase font-bold tracking-wider">Cálculo Contábil (Indep. de Parcelas)</p>
         </div>
 
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
@@ -127,7 +127,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
                   </div>
                 </div>
                 <span className={`text-xs font-black ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
-                   {formatCurrency(item.valor)}
+                   {item.type === 'revenue' ? '+' : '-'}{formatCurrency(item.valor)}
                 </span>
               </div>
             ))}
@@ -137,12 +137,12 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
           <h3 className="text-sm font-bold mb-5 flex items-center gap-2 text-gray-800">
             <CalendarDays size={16} className="text-gray-400" />
-            Info de Conexão
+            Configuração de Módulos
           </h3>
           <div className="space-y-3">
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Status do Saldo</p>
-              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">Todas as despesas, inclusive as em aberto, estão sendo subtraídas do saldo para uma visão realista.</p>
+              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Módulos Independentes</p>
+              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">Lembre-se: O controle de Parcelas é apenas visual e não afeta este Dashboard ou o Saldo Real.</p>
             </div>
             <button 
               onClick={refresh}
