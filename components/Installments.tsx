@@ -114,8 +114,13 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               const pAtual = item.parcela_atual ?? 1;
               const pTotal = item.total_parcelas ?? 1;
               const pValor = item.valor_parcela ?? 0;
-              const parcelasPendentes = Math.max(0, (pTotal - pAtual));
-              const totalQuitacao = pValor * (parcelasPendentes + 1);
+              
+              // Regra Correta: Pagas = Parcela Atual - 1
+              const pagas = Math.max(0, pAtual - 1);
+              // Regra Ajustada: Restantes = Total - Pagas
+              const restantes = Math.max(0, pTotal - pagas);
+              // Total para quitação: considera o que falta pagar (restantes)
+              const totalQuitacao = pValor * restantes;
 
               return (
                 <div key={item.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col">
@@ -124,16 +129,16 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                       <div className="bg-blue-50 p-2 rounded-xl text-blue-600 shrink-0"><CalendarClock size={18} /></div>
                       <div className="min-w-0">
                         <h4 className="font-bold text-gray-800 text-sm truncate">{item.descricao}</h4>
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Pagas: {pAtual}/{pTotal}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Pagas: {pagas}/{pTotal}</p>
                       </div>
                     </div>
                     {canEdit && (
                       <div className="flex items-center">
-                        <button onClick={() => openEditModal(item)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
+                        <button onClick={() => openEditModal(item)} className="text-gray-300 hover:text-blue-600 p-1.5 transition-colors"><Pencil size={16} /></button>
                         {confirmDeleteId === item.id ? (
                           <button onClick={() => handleDelete(item.id)} className="text-red-600 font-black text-[9px] uppercase px-2">Sim</button>
                         ) : (
-                          <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                          <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-300 hover:text-red-500 p-1.5 transition-colors"><Trash2 size={16} /></button>
                         )}
                       </div>
                     )}
@@ -146,7 +151,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                     </div>
                     <div className="bg-gray-50/50 p-3 rounded-2xl border border-gray-50">
                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Restantes</p>
-                      <p className="text-sm font-black text-gray-800">{parcelasPendentes}x</p>
+                      <p className="text-sm font-black text-gray-800">{restantes}x</p>
                     </div>
                   </div>
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { TrendingDown, TrendingUp, Wallet, History, CalendarDays } from 'lucide-react';
+import { TrendingDown, TrendingUp, Wallet, History, Banknote, X as LucideX, ChevronRight } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month } from '../types';
 
@@ -9,10 +9,17 @@ interface OverviewProps {
   refresh: () => void;
 }
 
+interface BankDetail {
+  nome: string;
+  valor: number;
+}
+
 const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
-  const [totals, setTotals] = useState({ revenue: 0, expenses: 0, balance: 0 });
+  const [totals, setTotals] = useState({ revenue: 0, expenses: 0, balance: 0, cards: 0 });
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [bankDetails, setBankDetails] = useState<BankDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCardsModal, setShowCardsModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -21,27 +28,40 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Busca apenas Receitas e Despesas Reais (Contas, Pix e Cartões)
-      // O menu PARCELAS é independente e não entra neste cálculo.
-      const [receitasRes, despesasRes, pixRes, bancosRes] = await Promise.all([
+      const [receitasRes, despesasRes, pixRes, bancosRes, bancosListaRes] = await Promise.all([
         supabaseClient.from('receitas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id),
         supabaseClient.from('despesas_contas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
         supabaseClient.from('despesas_pix_credito').select('valor_final, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
-        supabaseClient.from('banco_despesas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id)
+        supabaseClient.from('banco_despesas').select('valor, banco_id').eq('mes_id', currentMonth.id),
+        supabaseClient.from('bancos').select('id, nome')
       ]);
 
       const rev = receitasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
-      
       const expContas = despesasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
       const expPix = pixRes.data?.reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
       const expBancos = bancosRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
 
       const totalExp = expContas + expPix + expBancos;
 
+      // Agrupar gastos por banco para o modal
+      const details: BankDetail[] = [];
+      if (bancosListaRes.data && bancosRes.data) {
+        bancosListaRes.data.forEach(banco => {
+          const soma = bancosRes.data
+            .filter(d => d.banco_id === banco.id)
+            .reduce((acc, curr) => acc + curr.valor, 0);
+          if (soma > 0) {
+            details.push({ nome: banco.nome, valor: soma });
+          }
+        });
+      }
+      setBankDetails(details);
+
       setTotals({
         revenue: rev,
         expenses: totalExp,
-        balance: rev - totalExp
+        balance: rev - totalExp,
+        cards: expBancos
       });
 
       const allItems = [
@@ -134,18 +154,24 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col">
-          <h3 className="text-sm font-bold mb-5 flex items-center gap-2 text-gray-800">
-            <CalendarDays size={16} className="text-gray-400" />
-            Configuração de Módulos
-          </h3>
-          <div className="space-y-3">
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-              <p className="text-[9px] font-bold text-blue-700 uppercase tracking-widest mb-1">Módulos Independentes</p>
-              <p className="text-[11px] text-blue-900/60 leading-relaxed font-medium">Lembre-se: O controle de Parcelas é apenas visual e não afeta este Dashboard ou o Saldo Real.</p>
+        <div 
+          onClick={() => setShowCardsModal(true)}
+          className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col cursor-pointer hover:border-blue-200 transition-all group"
+        >
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
+              <Banknote size={16} className="text-gray-400" />
+              Total Cartões de Crédito
+            </h3>
+            <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+          </div>
+          <div className="space-y-4">
+            <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gasto em Faturas</p>
+              <h2 className="text-2xl font-black text-gray-900">{formatCurrency(totals.cards)}</h2>
             </div>
             <button 
-              onClick={refresh}
+              onClick={(e) => { e.stopPropagation(); refresh(); }}
               className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest"
             >
               Sincronizar Banco
@@ -153,6 +179,45 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </div>
         </div>
       </div>
+
+      {/* MODAL DE DETALHAMENTO DE CARTÕES */}
+      {showCardsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-2xl animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Detalhamento Cartões</h2>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{currentMonth.nome} {currentMonth.ano}</p>
+              </div>
+              <button onClick={() => setShowCardsModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <LucideX size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto no-scrollbar mb-6">
+              {bankDetails.length === 0 ? (
+                <div className="py-10 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum gasto registrado</p>
+                </div>
+              ) : (
+                bankDetails.map((bank, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">{bank.nome}</span>
+                    <span className="text-xs font-black text-gray-900">{formatCurrency(bank.valor)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex justify-between items-center p-4 bg-gray-900 rounded-2xl text-white">
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Total Faturas</span>
+                <span className="text-base font-black tracking-tight">{formatCurrency(totals.cards)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
