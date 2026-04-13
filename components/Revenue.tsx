@@ -94,10 +94,23 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const totalRevenue = revenues.reduce((acc, curr) => acc + curr.valor, 0);
   const canEdit = currentMonth.status !== 'fechado';
 
   return (
-    <div className="animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {!loading && revenues.length > 0 && (
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total de Receitas</p>
+            <h2 className="text-2xl font-black text-green-700 tracking-tight">{formatCurrency(totalRevenue)}</h2>
+          </div>
+          <div className="bg-green-50 p-3 rounded-2xl text-green-600">
+            <TrendingUp size={24} />
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
           <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>

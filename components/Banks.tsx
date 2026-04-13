@@ -10,6 +10,7 @@ interface BanksProps {
 
 const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [bankTotals, setBankTotals] = useState<{ [key: number]: number }>({});
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [bankExpenses, setBankExpenses] = useState<BankExpense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +26,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   useEffect(() => {
     fetchBanks();
-  }, []);
+  }, [currentMonth]);
 
   useEffect(() => {
     if (triggerAdd > 0 && !selectedBank) {
@@ -41,10 +42,22 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
   }, [selectedBank, currentMonth]);
 
   const fetchBanks = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabaseClient.from('bancos').select('*').order('nome');
-      if (error) throw error;
-      setBanks(data || []);
+      const [banksRes, expensesRes] = await Promise.all([
+        supabaseClient.from('bancos').select('*').order('nome'),
+        supabaseClient.from('banco_despesas').select('banco_id, valor').eq('mes_id', currentMonth.id)
+      ]);
+
+      if (banksRes.error) throw banksRes.error;
+      
+      const totals: { [key: number]: number } = {};
+      expensesRes.data?.forEach(exp => {
+        totals[exp.banco_id] = (totals[exp.banco_id] || 0) + exp.valor;
+      });
+
+      setBankTotals(totals);
+      setBanks(banksRes.data || []);
     } catch (err) {
       console.error("Erro ao buscar bancos:", err);
     } finally {
@@ -311,10 +324,15 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center px-2">
-        <h3 className="text-xl font-black text-gray-900">Controle de Cartões</h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
+        <div>
+          <h3 className="text-xl font-black text-gray-900">Controle de Cartões</h3>
+          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">
+            Total em Faturas: <span className="text-gray-900">{formatCurrency(Object.values(bankTotals).reduce((a, b) => a + b, 0))}</span>
+          </p>
+        </div>
         {canEdit && (
-          <button onClick={() => setShowBankModal(true)} className="bg-green-800 text-white px-5 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg">
+          <button onClick={() => setShowBankModal(true)} className="bg-green-800 text-white px-5 py-3 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg w-full sm:w-auto justify-center">
             <Plus size={16} /> Adicionar
           </button>
         )}
@@ -335,7 +353,8 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
                 <div className="flex justify-between items-end relative z-10">
                   <div>
                     <h4 className="text-2xl font-black text-gray-900 mb-1">{bank.nome}</h4>
-                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Gestão de Crédito</p>
+                    <p className="text-lg font-black text-gray-800">{formatCurrency(bankTotals[bank.id] || 0)}</p>
+                    <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mt-1">Fatura Atual</p>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-full group-hover:bg-green-700 group-hover:text-white transition-all"><ChevronRight size={24} /></div>
                 </div>

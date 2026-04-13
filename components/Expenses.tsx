@@ -131,23 +131,58 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const totalExpenses = expenses.reduce((acc, curr) => acc + curr.valor, 0);
+  const totalExpensesAberto = expenses.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor, 0);
+  
+  const totalPix = pixExpenses.reduce((acc, curr) => acc + curr.valor_final, 0);
+  const totalPixAberto = pixExpenses.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor_final, 0);
+
+  const currentTotal = activeTab === 'contas' ? totalExpenses : totalPix;
+  const currentTotalAberto = activeTab === 'contas' ? totalExpensesAberto : totalPixAberto;
+
   const canEdit = currentMonth.status !== 'fechado';
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      <div className="flex w-full bg-gray-200/50 p-0.5 rounded-xl gap-0.5 max-w-[200px] mx-auto border border-gray-200">
-        <button 
-          onClick={() => setActiveTab('contas')} 
-          className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
-        >
-          Fixas
-        </button>
-        <button 
-          onClick={() => setActiveTab('pix')} 
-          className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
-        >
-          Pix
-        </button>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex w-full bg-gray-200/50 p-0.5 rounded-xl gap-0.5 max-w-[200px] border border-gray-200">
+          <button 
+            onClick={() => setActiveTab('contas')} 
+            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'contas' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
+          >
+            Fixas
+          </button>
+          <button 
+            onClick={() => setActiveTab('pix')} 
+            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all uppercase tracking-widest ${activeTab === 'pix' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400'}`}
+          >
+            Pix
+          </button>
+        </div>
+
+        {!loading && (
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+              <div>
+                <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total da Tela</p>
+                <p className="text-sm sm:text-base font-black text-gray-900 leading-none">{formatCurrency(currentTotal)}</p>
+              </div>
+              <div className="p-1.5 sm:p-2 rounded-xl bg-gray-50 text-gray-400 shrink-0">
+                <Receipt size={14} className="sm:w-4 sm:h-4" />
+              </div>
+            </div>
+
+            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+              <div>
+                <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total em Aberto</p>
+                <p className="text-sm sm:text-base font-black text-red-600 leading-none">{formatCurrency(currentTotalAberto)}</p>
+              </div>
+              <div className="p-1.5 sm:p-2 rounded-xl bg-red-50 text-red-600 shrink-0">
+                <Zap size={14} className="sm:w-4 sm:h-4" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (

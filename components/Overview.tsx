@@ -37,9 +37,9 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
       ]);
 
       const rev = receitasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
-      const expContas = despesasRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
-      const expPix = pixRes.data?.reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
-      const expBancos = bancosRes.data?.reduce((acc, curr) => acc + curr.valor, 0) || 0;
+      const expContas = despesasRes.data?.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
+      const expPix = pixRes.data?.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor_final, 0) || 0;
+      const expBancos = bancosRes.data?.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor, 0) || 0;
 
       const totalExp = expContas + expPix + expBancos;
 
@@ -169,6 +169,17 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gasto em Faturas</p>
               <h2 className="text-2xl font-black text-gray-900">{formatCurrency(totals.cards)}</h2>
+              
+              {bankDetails.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-1.5">
+                  {bankDetails.map((bank, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
+                      <span>{bank.nome}</span>
+                      <span className="text-gray-700">{formatCurrency(bank.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <button 
               onClick={(e) => { e.stopPropagation(); refresh(); }}
