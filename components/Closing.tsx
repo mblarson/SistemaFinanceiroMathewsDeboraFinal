@@ -76,44 +76,99 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
 
     const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
     let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
-    let nextIdx = (idx + 1) % 12;
-    let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
-    const nextMonthName = meses_nomes[nextIdx];
     
-    const { data: nextMonths } = await supabaseClient
-      .from('meses')
-      .select('*')
-      .ilike('nome', nextMonthName)
-      .eq('ano', nextYear);
+    // M+1
+    let nextIdx1 = (idx + 1) % 12;
+    let nextYear1 = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+    const nextMonthName1 = meses_nomes[nextIdx1];
 
-    const nextMonthData = nextMonths?.[0];
+    // M+2
+    let nextIdx2 = (idx + 2) % 12;
+    let nextYear2 = currentMonth.ano + Math.floor((idx + 2) / 12);
+    const nextMonthName2 = meses_nomes[nextIdx2];
 
-    if (!nextMonthData) {
-      alert(`Erro: O mês de destino (${nextMonthName}/${nextYear}) não foi encontrado no sistema. O fechamento não pôde ser concluído.`);
+    // Função auxiliar para obter ou criar mês (seguindo lógica do App.tsx)
+    const getOrCreateMonth = async (nome: string, ano: number) => {
+      const { data: existing } = await supabaseClient
+        .from('meses')
+        .select('*')
+        .ilike('nome', nome)
+        .eq('ano', ano)
+        .maybeSingle();
+
+      if (existing) return existing;
+
+      try {
+        const { data: created, error } = await supabaseClient
+          .from('meses')
+          .insert([{ nome, ano, status: 'provisionamento' }])
+          .select()
+          .single();
+        
+        if (!error) return created;
+
+        const { data: createdAtivo } = await supabaseClient
+          .from('meses')
+          .insert([{ nome, ano, status: 'ativo' }])
+          .select()
+          .single();
+        
+        return createdAtivo;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const nextMonth1 = await getOrCreateMonth(nextMonthName1, nextYear1);
+    const nextMonth2 = await getOrCreateMonth(nextMonthName2, nextYear2);
+
+    if (!nextMonth1) {
+      alert(`Erro fatal: Não foi possível localizar ou criar o mês de destino (${nextMonthName1}/${nextYear1}).`);
       return;
     }
 
+    // Atualiza status dos meses e saldo final
     await supabaseClient.from('meses').update({ status: 'fechado', saldo_final: total }).eq('id', currentMonth.id);
-    await supabaseClient.from('meses').update({ status: 'ativo' }).eq('id', nextMonthData.id);
+    await supabaseClient.from('meses').update({ status: 'ativo' }).eq('id', nextMonth1.id);
 
+    // Projeção de Parcelamentos (Regra de 2 meses)
     const { data: installments } = await supabaseClient
       .from('parcelamentos')
       .select('*')
       .eq('mes_id', currentMonth.id);
 
     if (installments && installments.length > 0) {
-      const pending = installments.filter(i => (i.parcela_atual || 0) < (i.total_parcelas || 0));
-      
-      if (pending.length > 0) {
-        const carryOver = pending.map(i => ({
-          mes_id: nextMonthData.id,
-          descricao: i.descricao,
-          valor_parcela: i.valor_parcela,
-          parcela_atual: (i.parcela_atual || 0) + 1,
-          total_parcelas: i.total_parcelas
-        }));
+      const projectForMonth = async (targetMonthId: number, increment: number) => {
+        // Busca o que já existe no destino para evitar duplicidade por descrição
+        const { data: existingInTarget } = await supabaseClient
+          .from('parcelamentos')
+          .select('descricao')
+          .eq('mes_id', targetMonthId);
         
-        await supabaseClient.from('parcelamentos').insert(carryOver);
+        const existingDescs = new Set(existingInTarget?.map(i => i.descricao) || []);
+
+        const toInsert = installments
+          .filter(i => (i.parcela_atual + increment) <= i.total_parcelas)
+          .filter(i => !existingDescs.has(i.descricao))
+          .map(i => ({
+            mes_id: targetMonthId,
+            descricao: i.descricao,
+            valor_parcela: i.valor_parcela,
+            parcela_atual: (i.parcela_atual || 0) + increment,
+            total_parcelas: i.total_parcelas
+          }));
+
+        if (toInsert.length > 0) {
+          await supabaseClient.from('parcelamentos').insert(toInsert);
+        }
+      };
+
+      // Projeta para o mês seguinte (M+1)
+      await projectForMonth(nextMonth1.id, 1);
+      
+      // Projeta para o mês subsequente (M+2)
+      if (nextMonth2) {
+        await projectForMonth(nextMonth2.id, 2);
       }
     }
     

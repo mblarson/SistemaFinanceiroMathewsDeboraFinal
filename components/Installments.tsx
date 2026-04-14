@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil } from 'lucide-react';
+import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Installment } from '../types';
 
@@ -16,6 +16,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const [editingId, setEditingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', atual: '1', total: '1' });
+  const [projecting, setProjecting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -95,8 +96,117 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   const canEdit = currentMonth.status !== 'fechado';
 
+  const projectFutureInstallments = async () => {
+    if (installments.length === 0) return;
+    if (!confirm("Deseja projetar estes parcelamentos para os próximos 2 meses? Isso criará os registros em Maio e Junho (ou equivalentes) caso ainda não existam.")) return;
+
+    setProjecting(true);
+    try {
+      const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+      let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+      
+      // M+1
+      let nextIdx1 = (idx + 1) % 12;
+      let nextYear1 = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+      const nextMonthName1 = meses_nomes[nextIdx1];
+
+      // M+2
+      let nextIdx2 = (idx + 2) % 12;
+      let nextYear2 = currentMonth.ano + Math.floor((idx + 2) / 12);
+      const nextMonthName2 = meses_nomes[nextIdx2];
+
+      const getOrCreateMonth = async (nome: string, ano: number) => {
+        const { data: existing } = await supabaseClient
+          .from('meses')
+          .select('*')
+          .ilike('nome', nome)
+          .eq('ano', ano)
+          .maybeSingle();
+
+        if (existing) return existing;
+
+        try {
+          const { data: created, error } = await supabaseClient
+            .from('meses')
+            .insert([{ nome, ano, status: 'provisionamento' }])
+            .select()
+            .single();
+          
+          if (!error) return created;
+
+          const { data: createdAtivo } = await supabaseClient
+            .from('meses')
+            .insert([{ nome, ano, status: 'ativo' }])
+            .select()
+            .single();
+          
+          return createdAtivo;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const nextMonth1 = await getOrCreateMonth(nextMonthName1, nextYear1);
+      const nextMonth2 = await getOrCreateMonth(nextMonthName2, nextYear2);
+
+      if (!nextMonth1) {
+        alert(`Erro: Não foi possível localizar ou criar o mês de destino (${nextMonthName1}/${nextYear1}).`);
+        return;
+      }
+
+      const projectForMonth = async (targetMonthId: number, increment: number) => {
+        const { data: existingInTarget } = await supabaseClient
+          .from('parcelamentos')
+          .select('descricao')
+          .eq('mes_id', targetMonthId);
+        
+        const existingDescs = new Set(existingInTarget?.map(i => i.descricao) || []);
+
+        const toInsert = installments
+          .filter(i => (i.parcela_atual + increment) <= i.total_parcelas)
+          .filter(i => !existingDescs.has(i.descricao))
+          .map(i => ({
+            mes_id: targetMonthId,
+            descricao: i.descricao,
+            valor_parcela: i.valor_parcela,
+            parcela_atual: (i.parcela_atual || 0) + increment,
+            total_parcelas: i.total_parcelas
+          }));
+
+        if (toInsert.length > 0) {
+          await supabaseClient.from('parcelamentos').insert(toInsert);
+        }
+      };
+
+      await projectForMonth(nextMonth1.id, 1);
+      if (nextMonth2) {
+        await projectForMonth(nextMonth2.id, 2);
+      }
+
+      alert("Projeção concluída com sucesso para os próximos meses!");
+    } catch (err) {
+      console.error("Erro na projeção manual:", err);
+      alert("Ocorreu um erro ao projetar as parcelas.");
+    } finally {
+      setProjecting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
+      {installments.length > 0 && canEdit && (
+        <div className="flex justify-end">
+          <button 
+            onClick={projectFutureInstallments}
+            disabled={projecting}
+            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
+            {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
           <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
