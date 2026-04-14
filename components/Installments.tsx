@@ -194,26 +194,26 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
-      {installments.length > 0 && canEdit && (
-        <div className="flex justify-end">
-          <button 
-            onClick={projectFutureInstallments}
-            disabled={projecting}
-            className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
-            {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
-          </button>
-        </div>
-      )}
-
       {loading ? (
         <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
           <div className="w-8 h-8 border-3 border-green-700 border-t-transparent rounded-full animate-spin"></div>
           <p className="font-bold uppercase tracking-widest text-[9px]">Sincronizando...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <>
+          {installments.length > 0 && canEdit && (
+            <div className="flex justify-end mb-4">
+              <button 
+                onClick={projectFutureInstallments}
+                disabled={projecting}
+                className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-lg"
+              >
+                <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
+                {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
+              </button>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {installments.length === 0 ? (
             <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
               <CalendarClock size={32} className="mb-2 opacity-20" />
@@ -277,6 +277,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
             })
           )}
         </div>
+      </>
       )}
 
       {showModal && (
