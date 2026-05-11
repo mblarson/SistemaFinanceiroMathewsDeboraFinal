@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX } from 'lucide-react';
+import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, TrendingUp } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Expense, PixExpense } from '../types';
 
@@ -16,7 +16,12 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+  const [formData, setFormData] = useState({ 
+    desc: '', 
+    val: 'R$ 0,00', 
+    date: new Date().toISOString().split('T')[0],
+    tax: 5.0
+  });
 
   useEffect(() => {
     fetchPixConfig();
@@ -26,7 +31,12 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   useEffect(() => {
     if (triggerAdd > 0) {
       setEditingId(null);
-      setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+      setFormData({ 
+        desc: '', 
+        val: 'R$ 0,00', 
+        date: new Date().toISOString().split('T')[0],
+        tax: pixTax
+      });
       setShowModal(true);
     }
   }, [triggerAdd]);
@@ -87,7 +97,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     setFormData({
       desc: item.descricao,
       val: maskCurrency((numericVal * 100).toString()),
-      date: item.data
+      date: item.data,
+      tax: item.taxa_percentual || pixTax
     });
     setShowModal(true);
   };
@@ -111,9 +122,10 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         await supabaseClient.from('despesas_contas').insert([payload]);
       }
     } else {
-      const finalVal = val + (val * (pixTax / 100));
+      const selectedTax = formData.tax;
+      const finalVal = val + (val * (selectedTax / 100));
       payload.valor_original = val;
-      payload.taxa_percentual = pixTax;
+      payload.taxa_percentual = selectedTax;
       payload.valor_final = finalVal;
       if (editingId) {
         await supabaseClient.from('despesas_pix_credito').update(payload).eq('id', editingId);
@@ -124,7 +136,12 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
     setShowModal(false);
     setEditingId(null);
-    setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+    setFormData({ 
+      desc: '', 
+      val: 'R$ 0,00', 
+      date: new Date().toISOString().split('T')[0],
+      tax: pixTax
+    });
     fetchData();
   };
 
@@ -136,6 +153,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   
   const totalPix = pixExpenses.reduce((acc, curr) => acc + curr.valor_final, 0);
   const totalPixAberto = pixExpenses.filter(e => !e.pago).reduce((acc, curr) => acc + curr.valor_final, 0);
+  const totalPixFeesPaid = pixExpenses.filter(e => e.pago).reduce((acc, curr) => acc + (curr.valor_final - (curr.valor_original || 0)), 0);
 
   const currentTotal = activeTab === 'contas' ? totalExpenses : totalPix;
   const currentTotalAberto = activeTab === 'contas' ? totalExpensesAberto : totalPixAberto;
@@ -161,13 +179,24 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         </div>
 
         {!loading && (
-          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+          <div className={`grid ${activeTab === 'pix' ? 'grid-cols-3' : 'grid-cols-2'} gap-2 w-full sm:w-auto`}>
+            {activeTab === 'pix' && (
+              <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+                <div>
+                  <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 text-blue-600">Taxas Pagas</p>
+                  <p className="text-sm sm:text-base font-black text-blue-700 leading-none">{formatCurrency(totalPixFeesPaid)}</p>
+                </div>
+                <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+                  <TrendingUp size={14} className="sm:w-4 sm:h-4" />
+                </div>
+              </div>
+            )}
             <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
               <div>
                 <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total da Tela</p>
                 <p className="text-sm sm:text-base font-black text-gray-900 leading-none">{formatCurrency(currentTotal)}</p>
               </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-gray-50 text-gray-400 shrink-0">
+              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-gray-50 text-gray-400 shrink-0">
                 <Receipt size={14} className="sm:w-4 sm:h-4" />
               </div>
             </div>
@@ -177,7 +206,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total em Aberto</p>
                 <p className="text-sm sm:text-base font-black text-red-600 leading-none">{formatCurrency(currentTotalAberto)}</p>
               </div>
-              <div className="p-1.5 sm:p-2 rounded-xl bg-red-50 text-red-600 shrink-0">
+              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-red-50 text-red-600 shrink-0">
                 <Zap size={14} className="sm:w-4 sm:h-4" />
               </div>
             </div>
@@ -284,6 +313,27 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-xs" required />
                 </div>
               </div>
+              {activeTab === 'pix' && (
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Taxa (%)</label>
+                  <div className="flex gap-2">
+                    {[4, 5].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tax: t })}
+                        className={`flex-1 py-2 rounded-xl font-black text-xs border transition-all ${
+                          formData.tax === t 
+                            ? 'bg-green-800 text-white border-green-800' 
+                            : 'bg-gray-50 text-gray-400 border-gray-200'
+                        }`}
+                      >
+                        {t}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-3 pt-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>
                 <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
