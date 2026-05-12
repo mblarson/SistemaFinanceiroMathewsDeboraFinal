@@ -12,7 +12,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const [activeTab, setActiveTab] = useState<'contas' | 'pix'>('contas');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pixExpenses, setPixExpenses] = useState<PixExpense[]>([]);
-  const [pixTax, setPixTax] = useState(5.0);
+  const [pixTax, setPixTax] = useState(4.99);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -20,7 +20,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     desc: '', 
     val: 'R$ 0,00', 
     date: new Date().toISOString().split('T')[0],
-    tax: 5.0
+    tax: 4.99
   });
 
   useEffect(() => {
@@ -35,7 +35,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         desc: '', 
         val: 'R$ 0,00', 
         date: new Date().toISOString().split('T')[0],
-        tax: pixTax
+        tax: 4.99
       });
       setShowModal(true);
     }
@@ -140,7 +140,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
       desc: '', 
       val: 'R$ 0,00', 
       date: new Date().toISOString().split('T')[0],
-      tax: pixTax
+      tax: 4.99
     });
     fetchData();
   };
@@ -317,7 +317,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 <div>
                   <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Taxa (%)</label>
                   <div className="flex gap-2">
-                    {[4, 5].map((t) => (
+                    {[3.99, 4.99].map((t) => (
                       <button
                         key={t}
                         type="button"
