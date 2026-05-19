@@ -20,7 +20,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     desc: '', 
     val: 'R$ 0,00', 
     date: new Date().toISOString().split('T')[0],
-    tax: 4.99
+    tax: 4.99,
+    pago: false
   });
 
   useEffect(() => {
@@ -35,7 +36,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         desc: '', 
         val: 'R$ 0,00', 
         date: new Date().toISOString().split('T')[0],
-        tax: 4.99
+        tax: 4.99,
+        pago: false
       });
       setShowModal(true);
     }
@@ -98,7 +100,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
       desc: item.descricao,
       val: maskCurrency((numericVal * 100).toString()),
       date: item.data,
-      tax: item.taxa_percentual || pixTax
+      tax: item.taxa_percentual || pixTax,
+      pago: !!item.pago
     });
     setShowModal(true);
   };
@@ -111,7 +114,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     const payload: any = {
       mes_id: currentMonth.id,
       descricao: formData.desc,
-      data: formData.date
+      data: formData.date,
+      pago: formData.pago
     };
 
     if (activeTab === 'contas') {
@@ -140,7 +144,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
       desc: '', 
       val: 'R$ 0,00', 
       date: new Date().toISOString().split('T')[0],
-      tax: 4.99
+      tax: 4.99,
+      pago: false
     });
     fetchData();
   };
@@ -243,11 +248,11 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
                 <div className="flex items-center justify-between">
                   <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor)}</span>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-1">
                     {canEdit && (
                       <>
-                        <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
-                        <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                        <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
+                        <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
                       </>
                     )}
                   </div>
@@ -276,11 +281,11 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
                 <div className="flex items-center justify-between">
                   <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor_final)}</span>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-1">
                     {canEdit && (
                       <>
-                        <button onClick={() => openEditModal(exp)} className="text-gray-300 hover:text-blue-600 p-1.5"><Pencil size={16} /></button>
-                        <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5"><Trash2 size={16} /></button>
+                        <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
+                        <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
                       </>
                     )}
                   </div>
@@ -312,6 +317,25 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Data</label>
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-xs" required />
                 </div>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${formData.pago ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                    {formData.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                  </div>
+                  <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Status de Pagamento</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, pago: !formData.pago })}
+                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${
+                    formData.pago 
+                      ? 'bg-green-700 text-white' 
+                      : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {formData.pago ? 'Pago' : 'Pendente'}
+                </button>
               </div>
               {activeTab === 'pix' && (
                 <div>

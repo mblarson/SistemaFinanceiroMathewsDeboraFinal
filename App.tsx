@@ -12,7 +12,8 @@ import {
   CalendarClock,
   Plus,
   Clock,
-  CalendarDays
+  CalendarDays,
+  Calculator as CalcIcon
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
@@ -22,6 +23,7 @@ import Revenue from './components/Revenue';
 import Banks from './components/Banks';
 import Closing from './components/Closing';
 import Installments from './components/Installments';
+import Calculator from './components/Calculator';
 
 const App: React.FC = () => {
   const [view, setView] = useState<string>('overview');
@@ -33,8 +35,21 @@ const App: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [triggerAdd, setTriggerAdd] = useState(0);
 
+  const viewNames: Record<string, string> = {
+    overview: 'Dashboard',
+    expenses: 'Despesas',
+    revenue: 'Receitas',
+    banks: 'Cartões',
+    installments: 'Parcelas',
+    closing: 'Arquivo',
+    calculator: 'Calculadora'
+  };
+
   useEffect(() => {
     init();
+    if (window.location.pathname === '/calculadora') {
+      setView('calculator');
+    }
   }, []);
 
   const getMonthValue = (m: Month) => {
@@ -177,6 +192,10 @@ const App: React.FC = () => {
     setView(newView);
     setTriggerAdd(0); // Reseta gatilhos de adição ao navegar entre menus
     setIsSidebarOpen(false);
+    
+    // Atualiza a URL para suporte básico a rotas (opcional, mas solicitado pelo usuário)
+    const path = newView === 'calculator' ? '/calculadora' : '/';
+    window.history.pushState({}, '', path);
   };
 
   const handleContextChange = (month: Month) => {
@@ -213,45 +232,53 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden text-gray-900">
-      {/* Sidebar Mobile Toggle */}
-      {!isSidebarOpen && (
-        <button 
-          className="fixed bottom-8 left-8 z-50 p-5 bg-gray-900 text-white rounded-[2rem] shadow-2xl lg:hidden active:scale-90 transition-transform"
-          onClick={() => setIsSidebarOpen(true)}
-        >
-          <Menu size={24} />
-        </button>
-      )}
-
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-30 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
-
       {/* Navegação Lateral */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-8">
-          <div className="flex items-center gap-4 mb-12">
-            <div className="bg-gray-900 text-white p-3 rounded-[1.2rem] shadow-xl shadow-gray-200">
-              <Wallet size={24} />
+      <aside className={`fixed inset-y-0 left-0 z-40 w-full lg:w-72 bg-white border-r border-gray-100 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full p-6 lg:p-8 overflow-y-auto no-scrollbar">
+          <div className="flex items-center justify-between lg:justify-start gap-4 mb-8 lg:mb-12">
+            <div className="flex items-center gap-4">
+              <div className="bg-gray-900 text-white p-3 rounded-[1.2rem] shadow-xl shadow-gray-200">
+                <Wallet size={24} />
+              </div>
+              <div>
+                <span className="text-2xl font-black tracking-tighter uppercase block leading-none">M&D</span>
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Finanças</span>
+              </div>
             </div>
-            <div>
-              <span className="text-2xl font-black tracking-tighter uppercase block leading-none">M&D</span>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Finanças</span>
-            </div>
+            {/* Botão de fechar no mobile */}
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-gray-400 hover:text-gray-900">
+              <Plus size={28} className="rotate-45" />
+            </button>
           </div>
 
-          <nav className="flex-1 space-y-3">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-3">Principal</p>
-            <NavItem icon={<LayoutDashboard size={22} />} label="Dashboard" active={view === 'overview'} onClick={() => handleNavigate('overview')} />
-            <NavItem icon={<Receipt size={22} />} label="Despesas" active={view === 'expenses'} onClick={() => handleNavigate('expenses')} />
-            <NavItem icon={<TrendingUp size={22} />} label="Receitas" active={view === 'revenue'} onClick={() => handleNavigate('revenue')} />
+          <nav className="flex-1 space-y-8">
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-3">Principal</p>
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
+                <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={view === 'overview'} onClick={() => handleNavigate('overview')} />
+                <NavItem icon={<Receipt size={20} />} label="Despesas" active={view === 'expenses'} onClick={() => handleNavigate('expenses')} />
+                <NavItem icon={<TrendingUp size={20} />} label="Receitas" active={view === 'revenue'} onClick={() => handleNavigate('revenue')} />
+              </div>
+            </div>
             
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-10 mb-4 ml-3">Gestão</p>
-            <NavItem icon={<Banknote size={22} />} label="Cartões" active={view === 'banks'} onClick={() => handleNavigate('banks')} />
-            <NavItem icon={<CalendarClock size={22} />} label="Parcelas" active={view === 'installments'} onClick={() => handleNavigate('installments')} />
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-3">Gestão</p>
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
+                <NavItem icon={<Banknote size={20} />} label="Cartões" active={view === 'banks'} onClick={() => handleNavigate('banks')} />
+                <NavItem icon={<CalendarClock size={20} />} label="Parcelas" active={view === 'installments'} onClick={() => handleNavigate('installments')} />
+              </div>
+            </div>
             
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-10 mb-4 ml-3">Histórico</p>
-            <NavItem icon={<Clock size={22} />} label="Arquivo" active={view === 'closing'} onClick={() => handleNavigate('closing')} />
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-3">Extras</p>
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
+                <NavItem icon={<Clock size={20} />} label="Arquivo" active={view === 'closing'} onClick={() => handleNavigate('closing')} />
+                <NavItem icon={<CalcIcon size={20} />} label="Calculadora" active={view === 'calculator'} onClick={() => handleNavigate('calculator')} />
+              </div>
+            </div>
           </nav>
         </div>
       </aside>
@@ -313,24 +340,35 @@ const App: React.FC = () => {
             </div>
 
             {/* Ações Globais */}
-            <div className="flex items-center gap-3">
+            <div className="w-full sm:w-auto flex items-center gap-2">
+              {/* Menu Selector (Mobile Only) */}
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="lg:hidden flex-1 flex items-center justify-between bg-gray-900 text-white px-5 py-3.5 rounded-2xl shadow-xl active:scale-95 transition-all"
+              >
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] truncate mr-2">
+                  {viewNames[view] || view}
+                </span>
+                <Menu size={18} />
+              </button>
+
               {showAddAction && canEdit && (
                 <button 
                   onClick={onAddClick}
-                  className={`p-4 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all ${
+                  className={`p-3.5 lg:p-4 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all ${
                      currentContextMonth.id === -1 ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-gray-900 text-white'
                   }`}
                   title={currentContextMonth.id === -1 ? "Indisponível em modo visualização" : "Novo Lançamento"}
                   disabled={currentContextMonth.id === -1}
                 >
-                  <Plus size={22} />
+                  <Plus size={20} className="lg:w-[22px] lg:h-[22px]" />
                 </button>
               )}
               <button 
                 onClick={handleGlobalRefresh}
-                className="p-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-900 transition-all shadow-sm"
+                className="p-3.5 lg:p-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-900 transition-all shadow-sm active:scale-95"
               >
-                <RefreshCw size={22} />
+                <RefreshCw size={18} className="lg:w-[22px] lg:h-[22px]" />
               </button>
             </div>
           </div>
@@ -366,6 +404,7 @@ const App: React.FC = () => {
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'installments' && <Installments key={`in-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
+          {view === 'calculator' && <Calculator key="calculator" />}
         </div>
       </main>
     </div>
@@ -382,14 +421,14 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-500 font-bold text-base ${
+    className={`w-full flex flex-col lg:flex-row items-center lg:items-center lg:gap-4 px-4 py-4 lg:px-6 lg:py-5 rounded-2xl transition-all duration-500 font-bold ${
       active 
-        ? 'bg-gray-900 text-white shadow-2xl shadow-gray-400' 
+        ? 'bg-gray-900 text-white shadow-xl shadow-gray-200' 
         : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
     }`}
   >
-    <span className={active ? 'text-white' : 'text-gray-400'}>{icon}</span>
-    <span className="uppercase tracking-widest text-xs font-black">{label}</span>
+    <span className={`${active ? 'text-white' : 'text-gray-400'} mb-2 lg:mb-0`}>{icon}</span>
+    <span className="uppercase tracking-widest text-[8px] lg:text-xs font-black text-center lg:text-left">{label}</span>
   </button>
 );
 

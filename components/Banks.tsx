@@ -23,6 +23,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [bankForm, setBankForm] = useState({ nome: '', cor: '#15803d' });
   const [expForm, setExpForm] = useState({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+  const [editingExpId, setEditingExpId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchBanks();
@@ -135,22 +136,39 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
     }
   };
 
+  const openEditExpenseModal = (exp: BankExpense) => {
+    setEditingExpId(exp.id);
+    setExpForm({
+      desc: exp.descricao,
+      val: maskCurrency((exp.valor * 100).toString()),
+      date: exp.data
+    });
+    setShowExpenseModal(true);
+  };
+
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBank) return;
     const val = parseCurrency(expForm.val);
     if (val <= 0) return;
 
-    await supabaseClient.from('banco_despesas').insert([{
+    const payload = {
       mes_id: currentMonth.id,
       banco_id: selectedBank.id,
       descricao: expForm.desc,
       valor: val,
       pago: true,
       data: expForm.date
-    }]);
+    };
+
+    if (editingExpId) {
+      await supabaseClient.from('banco_despesas').update(payload).eq('id', editingExpId);
+    } else {
+      await supabaseClient.from('banco_despesas').insert([payload]);
+    }
 
     setShowExpenseModal(false);
+    setEditingExpId(null);
     setExpForm({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
     fetchBankExpenses();
   };
@@ -273,12 +291,17 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
                         <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{new Date(exp.data).toLocaleDateString('pt-BR')}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6">
-                      <span className="font-black text-lg text-gray-900">{formatCurrency(exp.valor)}</span>
+                    <div className="flex items-center gap-2 lg:gap-4">
+                      <span className="font-black text-sm lg:text-lg text-gray-900">{formatCurrency(exp.valor)}</span>
                       {canEdit && (
-                        <button onClick={() => handleDeleteExpense(exp.id)} className="text-gray-300 hover:text-red-500 transition-colors p-2">
-                          <Trash2 size={20} />
-                        </button>
+                        <div className="flex items-center gap-0.5">
+                          <button onClick={() => openEditExpenseModal(exp)} className="text-gray-300 hover:text-blue-600 transition-colors p-1.5">
+                            <Pencil size={18} />
+                          </button>
+                          <button onClick={() => handleDeleteExpense(exp.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1.5">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -292,8 +315,8 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
           <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-white w-full max-md p-8 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-bottom sm:zoom-in duration-300">
               <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-black text-gray-900">Novo Gasto</h2>
-                <button onClick={() => setShowExpenseModal(false)} className="text-gray-400"><LucideX /></button>
+                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">{editingExpId ? 'Editar' : 'Novo'} Lançamento</h2>
+                <button onClick={() => { setShowExpenseModal(false); setEditingExpId(null); }} className="text-gray-400"><LucideX /></button>
               </div>
               <form onSubmit={handleCreateExpense} className="space-y-5">
                 <div>

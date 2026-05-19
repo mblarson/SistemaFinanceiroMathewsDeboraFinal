@@ -243,12 +243,12 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                       </div>
                     </div>
                     {canEdit && (
-                      <div className="flex items-center">
-                        <button onClick={() => openEditModal(item)} className="text-gray-300 hover:text-blue-600 p-1.5 transition-colors"><Pencil size={16} /></button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEditModal(item)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
                         {confirmDeleteId === item.id ? (
-                          <button onClick={() => handleDelete(item.id)} className="text-red-600 font-black text-[9px] uppercase px-2">Sim</button>
+                          <button onClick={() => handleDelete(item.id)} className="bg-red-600 text-white font-black text-[9px] uppercase px-3 py-2 rounded-lg ml-2 shadow-sm">Confirmar</button>
                         ) : (
-                          <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-300 hover:text-red-500 p-1.5 transition-colors"><Trash2 size={16} /></button>
+                          <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
                         )}
                       </div>
                     )}
