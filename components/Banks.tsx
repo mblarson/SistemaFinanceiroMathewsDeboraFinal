@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Banknote, Plus, ChevronRight, ArrowLeft, Trash2, CheckCircle2, Circle, Save, Info, X as LucideX } from 'lucide-react';
+import { Banknote, Plus, ChevronRight, ArrowLeft, Trash2, CheckCircle2, Circle, Save, Info, Pencil, X as LucideX } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Bank, BankExpense } from '../types';
 
@@ -77,6 +77,20 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   const parseCurrency = (value: string) => {
     return parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  };
+
+  const formatDateSafe = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'S/D';
+    try {
+      const parts = dateStr.split('T')[0].split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? 'S/D' : d.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return 'S/D';
+    }
   };
 
   const fetchBankExpenses = async () => {
@@ -288,7 +302,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
                       <div className="bg-green-50 p-3 rounded-xl text-green-700"><CheckCircle2 size={20} /></div>
                       <div>
                         <h4 className="font-black text-gray-800">{exp.descricao}</h4>
-                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{new Date(exp.data).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{formatDateSafe(exp.data)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 lg:gap-4">

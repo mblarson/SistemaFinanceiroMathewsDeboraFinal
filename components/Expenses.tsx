@@ -8,6 +8,20 @@ interface ExpensesProps {
   triggerAdd: number;
 }
 
+const formatDateSafe = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 'S/D';
+  try {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 'S/D' : d.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return 'S/D';
+  }
+};
+
 const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const [activeTab, setActiveTab] = useState<'contas' | 'pix'>('contas');
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -240,7 +254,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   </button>
                   <div className="min-w-0">
                     <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{new Date(exp.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{formatDateSafe(exp.data)}</p>
                   </div>
                 </div>
 

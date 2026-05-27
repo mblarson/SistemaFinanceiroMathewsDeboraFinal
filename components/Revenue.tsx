@@ -8,6 +8,20 @@ interface RevenueProps {
   triggerAdd: number;
 }
 
+const formatDateSafe = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 'S/D';
+  try {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 'S/D' : d.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return 'S/D';
+  }
+};
+
 const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
   const [revenues, setRevenues] = useState<RevenueType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,7 +140,7 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
                 <div className="flex justify-between items-start mb-3">
                   <div className="min-w-0">
                     <h4 className="font-bold text-gray-800 text-sm truncate leading-tight">{rev.descricao}</h4>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{new Date(rev.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{formatDateSafe(rev.data)}</p>
                   </div>
                   <div className="bg-green-50 p-1.5 rounded-lg text-green-700 shrink-0">
                     <TrendingUp size={14} />

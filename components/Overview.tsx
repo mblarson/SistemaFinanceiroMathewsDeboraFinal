@@ -14,6 +14,20 @@ interface BankDetail {
   valor: number;
 }
 
+const formatDateSafe = (dateStr: string | null | undefined) => {
+  if (!dateStr) return 'S/D';
+  try {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 'S/D' : d.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return 'S/D';
+  }
+};
+
 const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   const [totals, setTotals] = useState({ revenue: 0, expenses: 0, balance: 0, cards: 0 });
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
@@ -143,7 +157,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-700">{item.descricao}</p>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase">{new Date(item.data).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">{formatDateSafe(item.data)}</p>
                   </div>
                 </div>
                 <span className={`text-xs font-black ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
