@@ -37,6 +37,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     tax: 4.99,
     pago: false
   });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchPixConfig();
@@ -122,46 +123,54 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const val = parseCurrency(formData.val);
     if (!formData.desc || val <= 0) return;
 
-    const payload: any = {
-      mes_id: currentMonth.id,
-      descricao: formData.desc,
-      data: formData.date,
-      pago: formData.pago
-    };
+    setSubmitting(true);
+    try {
+      const payload: any = {
+        mes_id: currentMonth.id,
+        descricao: formData.desc,
+        data: formData.date,
+        pago: formData.pago
+      };
 
-    if (activeTab === 'contas') {
-      payload.valor = val;
-      if (editingId) {
-        await supabaseClient.from('despesas_contas').update(payload).eq('id', editingId);
+      if (activeTab === 'contas') {
+        payload.valor = val;
+        if (editingId) {
+          await supabaseClient.from('despesas_contas').update(payload).eq('id', editingId);
+        } else {
+          await supabaseClient.from('despesas_contas').insert([payload]);
+        }
       } else {
-        await supabaseClient.from('despesas_contas').insert([payload]);
+        const selectedTax = formData.tax;
+        const finalVal = val + (val * (selectedTax / 100));
+        payload.valor_original = val;
+        payload.taxa_percentual = selectedTax;
+        payload.valor_final = finalVal;
+        if (editingId) {
+          await supabaseClient.from('despesas_pix_credito').update(payload).eq('id', editingId);
+        } else {
+          await supabaseClient.from('despesas_pix_credito').insert([payload]);
+        }
       }
-    } else {
-      const selectedTax = formData.tax;
-      const finalVal = val + (val * (selectedTax / 100));
-      payload.valor_original = val;
-      payload.taxa_percentual = selectedTax;
-      payload.valor_final = finalVal;
-      if (editingId) {
-        await supabaseClient.from('despesas_pix_credito').update(payload).eq('id', editingId);
-      } else {
-        await supabaseClient.from('despesas_pix_credito').insert([payload]);
-      }
+
+      setShowModal(false);
+      setEditingId(null);
+      setFormData({ 
+        desc: '', 
+        val: 'R$ 0,00', 
+        date: new Date().toISOString().split('T')[0],
+        tax: 4.99,
+        pago: false
+      });
+      fetchData();
+    } catch (err: any) {
+      alert("Erro ao salvar despesa: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
-
-    setShowModal(false);
-    setEditingId(null);
-    setFormData({ 
-      desc: '', 
-      val: 'R$ 0,00', 
-      date: new Date().toISOString().split('T')[0],
-      tax: 4.99,
-      pago: false
-    });
-    fetchData();
   };
 
   const formatCurrency = (val: number) => 
@@ -374,7 +383,9 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
               )}
               <div className="flex gap-3 pt-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest disabled:opacity-50">
+                  {submitting ? 'Salvando...' : 'Salvar'}
+                </button>
               </div>
             </form>
           </div>

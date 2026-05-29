@@ -28,6 +28,7 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -83,26 +84,34 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const val = parseCurrency(formData.val);
     if (!formData.desc || val <= 0) return;
 
-    const payload = {
-      mes_id: currentMonth.id,
-      descricao: formData.desc,
-      valor: val,
-      data: formData.date
-    };
+    setSubmitting(true);
+    try {
+      const payload = {
+        mes_id: currentMonth.id,
+        descricao: formData.desc,
+        valor: val,
+        data: formData.date
+      };
 
-    if (editingId) {
-      await supabaseClient.from('receitas').update(payload).eq('id', editingId);
-    } else {
-      await supabaseClient.from('receitas').insert([payload]);
+      if (editingId) {
+        await supabaseClient.from('receitas').update(payload).eq('id', editingId);
+      } else {
+        await supabaseClient.from('receitas').insert([payload]);
+      }
+
+      setShowModal(false);
+      setEditingId(null);
+      setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+      fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
-
-    setShowModal(false);
-    setEditingId(null);
-    setFormData({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
-    fetchData();
   };
 
   const formatCurrency = (val: number) => 
@@ -190,7 +199,9 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
               </div>
               <div className="flex gap-3 pt-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest disabled:opacity-50">
+                  {submitting ? 'Salvando...' : 'Salvar'}
+                </button>
               </div>
             </form>
           </div>

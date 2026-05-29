@@ -18,6 +18,8 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [specialFields, setSpecialFields] = useState<{ [key: string]: string }>({});
   const [saving, setSaving] = useState(false);
+  const [submittingBank, setSubmittingBank] = useState(false);
+  const [submittingExpense, setSubmittingExpense] = useState(false);
 
   const [showBankModal, setShowBankModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -121,13 +123,21 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   const handleCreateBank = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabaseClient.from('bancos').insert([bankForm]);
-    if (error) {
-      alert("Erro ao criar: " + error.message);
-    } else {
-      setShowBankModal(false);
-      setBankForm({ nome: '', cor: '#15803d' });
-      fetchBanks();
+    if (submittingBank) return;
+    setSubmittingBank(true);
+    try {
+      const { error } = await supabaseClient.from('bancos').insert([bankForm]);
+      if (error) {
+        alert("Erro ao criar: " + error.message);
+      } else {
+        setShowBankModal(false);
+        setBankForm({ nome: '', cor: '#15803d' });
+        fetchBanks();
+      }
+    } catch (err: any) {
+      alert("Erro ao criar banco: " + err.message);
+    } finally {
+      setSubmittingBank(false);
     }
   };
 
@@ -162,29 +172,36 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBank) return;
+    if (!selectedBank || submittingExpense) return;
     const val = parseCurrency(expForm.val);
     if (val <= 0) return;
 
-    const payload = {
-      mes_id: currentMonth.id,
-      banco_id: selectedBank.id,
-      descricao: expForm.desc,
-      valor: val,
-      pago: true,
-      data: expForm.date
-    };
+    setSubmittingExpense(true);
+    try {
+      const payload = {
+        mes_id: currentMonth.id,
+        banco_id: selectedBank.id,
+        descricao: expForm.desc,
+        valor: val,
+        pago: true,
+        data: expForm.date
+      };
 
-    if (editingExpId) {
-      await supabaseClient.from('banco_despesas').update(payload).eq('id', editingExpId);
-    } else {
-      await supabaseClient.from('banco_despesas').insert([payload]);
+      if (editingExpId) {
+        await supabaseClient.from('banco_despesas').update(payload).eq('id', editingExpId);
+      } else {
+        await supabaseClient.from('banco_despesas').insert([payload]);
+      }
+
+      setShowExpenseModal(false);
+      setEditingExpId(null);
+      setExpForm({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
+      fetchBankExpenses();
+    } catch (err: any) {
+      alert("Erro ao salvar lançamento: " + err.message);
+    } finally {
+      setSubmittingExpense(false);
     }
-
-    setShowExpenseModal(false);
-    setEditingExpId(null);
-    setExpForm({ desc: '', val: 'R$ 0,00', date: new Date().toISOString().split('T')[0] });
-    fetchBankExpenses();
   };
 
   const handleDeleteExpense = async (id: number) => {
@@ -349,7 +366,9 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
                 </div>
                 <div className="flex gap-4 pt-6">
                   <button type="button" onClick={() => setShowExpenseModal(false)} className="flex-1 bg-gray-100 py-5 rounded-2xl font-black text-gray-500 uppercase tracking-widest text-xs">Cancelar</button>
-                  <button type="submit" className="flex-1 bg-green-800 text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest text-xs">Registrar</button>
+                  <button type="submit" disabled={submittingExpense} className="flex-1 bg-green-800 text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest text-xs disabled:opacity-50">
+                    {submittingExpense ? 'Registrando...' : 'Registrar'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -429,7 +448,9 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
               </div>
               <div className="flex gap-4 pt-6">
                 <button type="button" onClick={() => setShowBankModal(false)} className="flex-1 bg-gray-100 py-5 rounded-2xl font-black text-gray-500 uppercase tracking-widest text-xs">Cancelar</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest text-xs">Criar</button>
+                <button type="submit" disabled={submittingBank} className="flex-1 bg-green-800 text-white py-5 rounded-2xl font-black shadow-xl uppercase tracking-widest text-xs disabled:opacity-50">
+                  {submittingBank ? 'Criando...' : 'Criar'}
+                </button>
               </div>
             </form>
           </div>

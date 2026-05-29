@@ -17,6 +17,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', atual: '1', total: '1' });
   const [projecting, setProjecting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -68,24 +69,33 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     const val = parseCurrency(formData.val);
-    const payload = {
-      mes_id: currentMonth.id,
-      descricao: formData.desc,
-      valor_parcela: val,
-      parcela_atual: parseInt(formData.atual, 10),
-      total_parcelas: parseInt(formData.total, 10)
-    };
-
-    if (editingId) {
-      await supabaseClient.from('parcelamentos').update(payload).eq('id', editingId);
-    } else {
-      await supabaseClient.from('parcelamentos').insert([payload]);
-    }
     
-    setShowModal(false);
-    setEditingId(null);
-    fetchData();
+    setSubmitting(true);
+    try {
+      const payload = {
+        mes_id: currentMonth.id,
+        descricao: formData.desc,
+        valor_parcela: val,
+        parcela_atual: parseInt(formData.atual, 10),
+        total_parcelas: parseInt(formData.total, 10)
+      };
+
+      if (editingId) {
+        await supabaseClient.from('parcelamentos').update(payload).eq('id', editingId);
+      } else {
+        await supabaseClient.from('parcelamentos').insert([payload]);
+      }
+      
+      setShowModal(false);
+      setEditingId(null);
+      fetchData();
+    } catch (err: any) {
+      alert("Erro ao salvar parcelamento: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -192,6 +202,8 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   };
 
+  const totalParcelasMes = installments.reduce((acc, item) => acc + (item.valor_parcela ?? 0), 0);
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       {loading ? (
@@ -201,16 +213,28 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         </div>
       ) : (
         <>
-          {installments.length > 0 && canEdit && (
-            <div className="flex justify-end mb-4">
-              <button 
-                onClick={projectFutureInstallments}
-                disabled={projecting}
-                className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-lg"
-              >
-                <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
-                {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
-              </button>
+          {installments.length > 0 && (
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6 bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+              <div className="flex items-center gap-3.5">
+                <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
+                  <CalendarClock size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total de Parcelas em {currentMonth.nome}</p>
+                  <p className="text-2xl font-black text-emerald-800 tracking-tight">{formatCurrency(totalParcelasMes)}</p>
+                </div>
+              </div>
+              
+              {canEdit && (
+                <button 
+                  onClick={projectFutureInstallments}
+                  disabled={projecting}
+                  className="flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-md cursor-pointer self-start sm:self-auto shrink-0"
+                >
+                  <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
+                  {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
+                </button>
+              )}
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -312,7 +336,9 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               </div>
               <div className="flex gap-3 pt-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 font-bold py-3.5 rounded-xl uppercase text-[10px] tracking-widest">Sair</button>
-                <button type="submit" className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest">Salvar</button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-green-800 text-white font-bold py-3.5 rounded-xl shadow-md uppercase text-[10px] tracking-widest disabled:opacity-50">
+                  {submitting ? 'Salvando...' : 'Salvar'}
+                </button>
               </div>
             </form>
           </div>
