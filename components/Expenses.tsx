@@ -110,6 +110,44 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     fetchData();
   };
 
+  // Verifica dinamicamente se a despesa correspondente já foi replicada para o mês seguinte
+  const checkReplicacao = async (itemDesc: string) => {
+    try {
+      const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+      let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+      if (idx !== -1) {
+        let nextIdx = (idx + 1) % 12;
+        let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+        const nextMonthName = meses_nomes[nextIdx];
+
+        const { data: nextMonth } = await supabaseClient
+          .from('meses')
+          .select('*')
+          .ilike('nome', nextMonthName)
+          .eq('ano', nextYear)
+          .maybeSingle();
+
+        if (nextMonth) {
+          const table = activeTab === 'contas' ? 'despesas_contas' : 'despesas_pix_credito';
+          const { data: existing } = await supabaseClient
+            .from(table)
+            .select('*')
+            .eq('mes_id', nextMonth.id)
+            .eq('descricao', itemDesc)
+            .maybeSingle();
+
+          if (existing) {
+            setFormData(prev => ({ ...prev, programarProximo: true }));
+            return;
+          }
+        }
+      }
+      setFormData(prev => ({ ...prev, programarProximo: false }));
+    } catch (err) {
+      console.error("Erro ao checar replicação:", err);
+    }
+  };
+
   const openEditModal = (item: any) => {
     setEditingId(item.id);
     const numericVal = item.valor || item.valor_original || 0;
@@ -119,9 +157,132 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
       date: item.data,
       tax: item.taxa_percentual || pixTax,
       pago: !!item.pago,
-      programarProximo: false
+      programarProximo: false // Inicializa como falso e busca dinamicamente
     });
     setShowModal(true);
+    checkReplicacao(item.descricao);
+  };
+
+  const handleToggleReplicar = async () => {
+    const newValue = !formData.programarProximo;
+    setFormData(prev => ({ ...prev, programarProximo: newValue }));
+    
+    // Se for uma despesa existente, salvamos e replicamos imediatamente de forma transparente
+    if (editingId) {
+      const table = activeTab === 'contas' ? 'despesas_contas' : 'despesas_pix_credito';
+      try {
+        const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+        let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+        if (idx !== -1) {
+          let nextIdx = (idx + 1) % 12;
+          let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+          const nextMonthName = meses_nomes[nextIdx];
+
+          const getOrCreateMonth = async (nome: string, ano: number) => {
+            const { data: existing } = await supabaseClient
+              .from('meses')
+              .select('*')
+              .ilike('nome', nome)
+              .eq('ano', ano)
+              .maybeSingle();
+
+            if (existing) return existing;
+
+            try {
+              const { data: created, error } = await supabaseClient
+                .from('meses')
+                .insert([{ nome, ano, status: 'provisionamento' }])
+                .select()
+                .single();
+              
+              if (!error && created) return created;
+
+              const { data: createdAtivo } = await supabaseClient
+                .from('meses')
+                .insert([{ nome, ano, status: 'ativo' }])
+                .select()
+                .single();
+              
+              return createdAtivo;
+            } catch (e) {
+              return null;
+            }
+          };
+
+          const nextMonth = await getOrCreateMonth(nextMonthName, nextYear);
+          if (nextMonth) {
+            // Buscamos a despesa atual correspondente
+            const { data: currentExpense } = await supabaseClient
+              .from(table)
+              .select('*')
+              .eq('id', editingId)
+              .single();
+
+            if (currentExpense) {
+              if (newValue) {
+                // Verificar se a réplica já existe no próximo mês com a mesma descrição (impedir duplicações)
+                const { data: existingReplica } = await supabaseClient
+                  .from(table)
+                  .select('*')
+                  .eq('mes_id', nextMonth.id)
+                  .eq('descricao', currentExpense.descricao)
+                  .maybeSingle();
+
+                if (!existingReplica) {
+                  const originalDateStr = currentExpense.data || formData.date;
+                  let nextMonthDate = originalDateStr;
+                  try {
+                    const parts = originalDateStr.split('-');
+                    if (parts.length === 3) {
+                      let dYear = nextYear;
+                      let dMonth = String(nextIdx + 1).padStart(2, '0');
+                      let dDay = parts[2];
+                      const maxDays = new Date(dYear, nextIdx + 1, 0).getDate();
+                      if (parseInt(dDay, 10) > maxDays) {
+                        dDay = String(maxDays).padStart(2, '0');
+                      }
+                      nextMonthDate = `${dYear}-${dMonth}-${dDay}`;
+                    }
+                  } catch (e) {
+                    console.error("Error setting next month date:", e);
+                  }
+
+                  const val = currentExpense.valor || currentExpense.valor_original || 0;
+                  const nextPayload: any = {
+                    mes_id: nextMonth.id,
+                    descricao: currentExpense.descricao,
+                    data: nextMonthDate,
+                    pago: false
+                  };
+
+                  if (activeTab === 'contas') {
+                    nextPayload.valor = val;
+                    await supabaseClient.from('despesas_contas').insert([nextPayload]);
+                  } else {
+                    const selectedTax = currentExpense.taxa_percentual || 4.99;
+                    const finalVal = val + (val * (selectedTax / 100));
+                    nextPayload.valor_original = val;
+                    nextPayload.taxa_percentual = selectedTax;
+                    nextPayload.valor_final = finalVal;
+                    await supabaseClient.from('despesas_pix_credito').insert([nextPayload]);
+                  }
+                }
+              } else {
+                // Se o usuário mudou para NÃO, excluímos a réplica correspondente imediatamente do próximo mês
+                await supabaseClient
+                  .from(table)
+                  .delete()
+                  .eq('mes_id', nextMonth.id)
+                  .eq('descricao', currentExpense.descricao);
+              }
+            }
+          }
+        }
+        fetchData();
+      } catch (err) {
+        console.error("Erro ao alternar replicação imediata:", err);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -159,7 +320,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         }
       }
 
-      if (formData.programarProximo) {
+      // Replicar no mês seguinte se for uma nova despesa preenchida com a opção marcada
+      if (!editingId && formData.programarProximo) {
         try {
           const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
           let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
@@ -201,41 +363,53 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
             const nextMonth = await getOrCreateMonth(nextMonthName, nextYear);
             if (nextMonth) {
-              const originalDateStr = formData.date;
-              let nextMonthDate = originalDateStr;
-              try {
-                const parts = originalDateStr.split('-');
-                if (parts.length === 3) {
-                  let dYear = nextYear;
-                  let dMonth = String(nextIdx + 1).padStart(2, '0');
-                  let dDay = parts[2];
-                  const maxDays = new Date(dYear, nextIdx + 1, 0).getDate();
-                  if (parseInt(dDay, 10) > maxDays) {
-                    dDay = String(maxDays).padStart(2, '0');
+              const table = activeTab === 'contas' ? 'despesas_contas' : 'despesas_pix_credito';
+              
+              // Evitar duplicações
+              const { data: duplicateCheck } = await supabaseClient
+                .from(table)
+                .select('*')
+                .eq('mes_id', nextMonth.id)
+                .eq('descricao', formData.desc)
+                .maybeSingle();
+
+              if (!duplicateCheck) {
+                const originalDateStr = formData.date;
+                let nextMonthDate = originalDateStr;
+                try {
+                  const parts = originalDateStr.split('-');
+                  if (parts.length === 3) {
+                    let dYear = nextYear;
+                    let dMonth = String(nextIdx + 1).padStart(2, '0');
+                    let dDay = parts[2];
+                    const maxDays = new Date(dYear, nextIdx + 1, 0).getDate();
+                    if (parseInt(dDay, 10) > maxDays) {
+                      dDay = String(maxDays).padStart(2, '0');
+                    }
+                    nextMonthDate = `${dYear}-${dMonth}-${dDay}`;
                   }
-                  nextMonthDate = `${dYear}-${dMonth}-${dDay}`;
+                } catch (e) {
+                  console.error("Error setting next month date:", e);
                 }
-              } catch (e) {
-                console.error("Error setting next month date:", e);
-              }
 
-              const nextPayload: any = {
-                mes_id: nextMonth.id,
-                descricao: formData.desc,
-                data: nextMonthDate,
-                pago: false
-              };
+                const nextPayload: any = {
+                  mes_id: nextMonth.id,
+                  descricao: formData.desc,
+                  data: nextMonthDate,
+                  pago: false
+                };
 
-              if (activeTab === 'contas') {
-                nextPayload.valor = val;
-                await supabaseClient.from('despesas_contas').insert([nextPayload]);
-              } else {
-                const selectedTax = formData.tax;
-                const finalVal = val + (val * (selectedTax / 100));
-                nextPayload.valor_original = val;
-                nextPayload.taxa_percentual = selectedTax;
-                nextPayload.valor_final = finalVal;
-                await supabaseClient.from('despesas_pix_credito').insert([nextPayload]);
+                if (activeTab === 'contas') {
+                  nextPayload.valor = val;
+                  await supabaseClient.from('despesas_contas').insert([nextPayload]);
+                } else {
+                  const selectedTax = formData.tax;
+                  const finalVal = val + (val * (selectedTax / 100));
+                  nextPayload.valor_original = val;
+                  nextPayload.taxa_percentual = selectedTax;
+                  nextPayload.valor_final = finalVal;
+                  await supabaseClient.from('despesas_pix_credito').insert([nextPayload]);
+                }
               }
             }
           }
@@ -461,7 +635,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, programarProximo: !formData.programarProximo })}
+                  onClick={handleToggleReplicar}
                   className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${
                     formData.programarProximo 
                       ? 'bg-blue-700 text-white' 

@@ -204,16 +204,20 @@ const executeOfflineQuery = async (steps: ChainStep[], tableName: string): Promi
     saveLocalDB(db);
 
     const isArrayInput = Array.isArray(insertPayloads);
-    const returnedData = isArrayInput ? insertedRows : insertedRows[0];
+    let returnedData: any = isArrayInput ? insertedRows : insertedRows[0];
+    
+    if (isSingle || isMaybeSingle) {
+      returnedData = Array.isArray(returnedData) ? returnedData[0] : returnedData;
+    }
     
     // Retorna mock-chain se precisar de seleções subsequentes
     return { 
       data: returnedData, 
       error: null,
       select: () => ({
-        single: () => ({ data: returnedData, error: null }),
-        maybeSingle: () => ({ data: returnedData, error: null }),
-        then: (resolve: any) => resolve({ data: returnedData, error: null })
+        single: () => ({ data: Array.isArray(returnedData) ? returnedData[0] : returnedData, error: null }),
+        maybeSingle: () => ({ data: Array.isArray(returnedData) ? returnedData[0] : returnedData, error: null }),
+        then: (resolve: any) => resolve({ data: Array.isArray(returnedData) ? returnedData[0] : returnedData, error: null })
       })
     };
   }
