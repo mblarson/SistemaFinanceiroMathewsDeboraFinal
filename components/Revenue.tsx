@@ -48,7 +48,8 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
       .from('receitas')
       .select('*')
       .eq('mes_id', currentMonth.id)
-      .order('data', { ascending: true });
+      .order('data', { ascending: true })
+      .order('id', { ascending: true });
     setRevenues(data || []);
     setLoading(false);
   };

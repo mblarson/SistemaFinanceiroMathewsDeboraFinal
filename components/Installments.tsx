@@ -56,7 +56,12 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         
         const descA = a.descricao || '';
         const descB = b.descricao || '';
-        return descA.localeCompare(descB);
+        const descComp = descA.localeCompare(descB);
+        if (descComp !== 0) {
+          return descComp;
+        }
+
+        return (a.id ?? 0) - (b.id ?? 0);
       });
 
       setInstallments(sorted);

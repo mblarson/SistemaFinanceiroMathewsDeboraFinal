@@ -26,6 +26,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
   const [activeTab, setActiveTab] = useState<'contas' | 'pix'>('contas');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pixExpenses, setPixExpenses] = useState<PixExpense[]>([]);
+  const [replicatedDescriptions, setReplicatedDescriptions] = useState<Set<string>>(new Set());
   const [pixTax, setPixTax] = useState(4.99);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -67,22 +68,64 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    if (activeTab === 'contas') {
-      const { data } = await supabaseClient
-        .from('despesas_contas')
-        .select('*')
-        .eq('mes_id', currentMonth.id)
-        .order('data', { ascending: true });
-      setExpenses(data || []);
-    } else {
-      const { data } = await supabaseClient
-        .from('despesas_pix_credito')
-        .select('*')
-        .eq('mes_id', currentMonth.id)
-        .order('data', { ascending: true });
-      setPixExpenses(data || []);
+    try {
+      if (activeTab === 'contas') {
+        const { data } = await supabaseClient
+          .from('despesas_contas')
+          .select('*')
+          .eq('mes_id', currentMonth.id)
+          .order('data', { ascending: true })
+          .order('id', { ascending: true });
+        setExpenses(data || []);
+      } else {
+        const { data } = await supabaseClient
+          .from('despesas_pix_credito')
+          .select('*')
+          .eq('mes_id', currentMonth.id)
+          .order('data', { ascending: true })
+          .order('id', { ascending: true });
+        setPixExpenses(data || []);
+      }
+
+      // Busca as descrições das despesas do próximo mês para destaque de replicação
+      const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+      let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+      if (idx !== -1) {
+        let nextIdx = (idx + 1) % 12;
+        let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+        const nextMonthName = meses_nomes[nextIdx];
+
+        const { data: nextMonth } = await supabaseClient
+          .from('meses')
+          .select('*')
+          .ilike('nome', nextMonthName)
+          .eq('ano', nextYear)
+          .maybeSingle();
+
+        if (nextMonth) {
+          const table = activeTab === 'contas' ? 'despesas_contas' : 'despesas_pix_credito';
+          const { data: nextExpenses } = await supabaseClient
+            .from(table)
+            .select('descricao')
+            .eq('mes_id', nextMonth.id);
+
+          if (nextExpenses) {
+            const descs = new Set(nextExpenses.map(item => item.descricao));
+            setReplicatedDescriptions(descs);
+          } else {
+            setReplicatedDescriptions(new Set());
+          }
+        } else {
+          setReplicatedDescriptions(new Set());
+        }
+      } else {
+        setReplicatedDescriptions(new Set());
+      }
+    } catch (err) {
+      console.error("Erro no fetchData:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const maskCurrency = (value: string) => {
@@ -514,70 +557,112 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {activeTab === 'contas' ? (
             expenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sem despesas fixas.</p> :
-            expenses.map(exp => (
-              <div key={exp.id} className={`bg-white p-4 rounded-2xl border transition-all shadow-sm ${exp.pago ? 'opacity-50 border-transparent bg-gray-50' : 'border-gray-100 hover:border-red-100'}`}>
-                <div className="flex items-start gap-2.5 mb-3">
-                  <button 
-                    onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
-                    className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
-                    disabled={!canEdit}
-                  >
-                    {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                  </button>
-                  <div className="min-w-0">
-                    <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{formatDateSafe(exp.data)}</p>
+            expenses.map(exp => {
+              const isReplicated = replicatedDescriptions.has(exp.descricao);
+              return (
+                <div 
+                  key={exp.id} 
+                  className={`p-4 rounded-2xl border transition-all shadow-sm relative ${
+                    exp.pago ? 'opacity-50 bg-gray-50' : 'bg-white'
+                  } ${
+                    isReplicated 
+                      ? 'border-blue-500 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
+                      : exp.pago 
+                        ? 'border-transparent' 
+                        : 'border-gray-100 hover:border-red-100'
+                  }`}
+                >
+                  {isReplicated && (
+                    <div className="absolute top-3 right-3 select-none">
+                      <span className="bg-blue-600 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm">
+                        REPLICADA
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2.5 mb-3">
+                    <button 
+                      onClick={() => handleTogglePaid('despesas_contas', exp.id, exp.pago)} 
+                      className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                      disabled={!canEdit}
+                    >
+                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                    </button>
+                    <div className="min-w-0">
+                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{formatDateSafe(exp.data)}</p>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-gray-50 mb-3" />
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor)}</span>
+                    <div className="flex items-center gap-1">
+                      {canEdit && (
+                        <>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
+                          <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <div className="h-px bg-gray-50 mb-3" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor)}</span>
-                  <div className="flex items-center gap-1">
-                    {canEdit && (
-                      <>
-                        <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
-                        <button onClick={() => handleDelete('despesas_contas', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             pixExpenses.length === 0 ? <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sem despesas via Pix.</p> :
-            pixExpenses.map(exp => (
-              <div key={exp.id} className={`bg-white p-4 rounded-2xl border transition-all shadow-sm ${exp.pago ? 'opacity-50 border-transparent bg-gray-50' : 'border-gray-100 hover:border-yellow-100'}`}>
-                <div className="flex items-start gap-2.5 mb-3">
-                  <button 
-                    onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
-                    className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
-                    disabled={!canEdit}
-                  >
-                    {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                  </button>
-                  <div className="min-w-0">
-                    <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Taxa: {exp.taxa_percentual}%</p>
+            pixExpenses.map(exp => {
+              const isReplicated = replicatedDescriptions.has(exp.descricao);
+              return (
+                <div 
+                  key={exp.id} 
+                  className={`p-4 rounded-2xl border transition-all shadow-sm relative ${
+                    exp.pago ? 'opacity-50 bg-gray-50' : 'bg-white'
+                  } ${
+                    isReplicated 
+                      ? 'border-blue-500 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
+                      : exp.pago 
+                        ? 'border-transparent' 
+                        : 'border-gray-100 hover:border-yellow-100'
+                  }`}
+                >
+                  {isReplicated && (
+                    <div className="absolute top-3 right-3 select-none">
+                      <span className="bg-blue-600 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm">
+                        REPLICADA
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2.5 mb-3">
+                    <button 
+                      onClick={() => handleTogglePaid('despesas_pix_credito', exp.id, exp.pago)} 
+                      className={`shrink-0 mt-0.5 ${exp.pago ? 'text-green-600' : 'text-gray-200 hover:text-green-400'}`}
+                      disabled={!canEdit}
+                    >
+                      {exp.pago ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                    </button>
+                    <div className="min-w-0">
+                      <h4 className={`font-bold text-gray-800 text-sm truncate leading-tight ${exp.pago ? 'line-through' : ''}`}>{exp.descricao}</h4>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Taxa: {exp.taxa_percentual}%</p>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-gray-50 mb-3" />
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor_final)}</span>
+                    <div className="flex items-center gap-1">
+                      {canEdit && (
+                        <>
+                          <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
+                          <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <div className="h-px bg-gray-50 mb-3" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-base text-gray-900 tracking-tight">{formatCurrency(exp.valor_final)}</span>
-                  <div className="flex items-center gap-1">
-                    {canEdit && (
-                      <>
-                        <button onClick={() => openEditModal(exp)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
-                        <button onClick={() => handleDelete('despesas_pix_credito', exp.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
