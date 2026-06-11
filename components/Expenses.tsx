@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, TrendingUp } from 'lucide-react';
+import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, TrendingUp, CalendarClock } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month, Expense, PixExpense } from '../types';
 
@@ -35,7 +35,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     val: 'R$ 0,00', 
     date: new Date().toISOString().split('T')[0],
     tax: 4.99,
-    pago: false
+    pago: false,
+    programarProximo: false
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -52,7 +53,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         val: 'R$ 0,00', 
         date: new Date().toISOString().split('T')[0],
         tax: 4.99,
-        pago: false
+        pago: false,
+        programarProximo: false
       });
       setShowModal(true);
     }
@@ -116,7 +118,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
       val: maskCurrency((numericVal * 100).toString()),
       date: item.data,
       tax: item.taxa_percentual || pixTax,
-      pago: !!item.pago
+      pago: !!item.pago,
+      programarProximo: false
     });
     setShowModal(true);
   };
@@ -156,6 +159,91 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         }
       }
 
+      if (formData.programarProximo) {
+        try {
+          const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+          let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+          if (idx !== -1) {
+            let nextIdx = (idx + 1) % 12;
+            let nextYear = idx === 11 ? currentMonth.ano + 1 : currentMonth.ano;
+            const nextMonthName = meses_nomes[nextIdx];
+
+            const getOrCreateMonth = async (nome: string, ano: number) => {
+              const { data: existing } = await supabaseClient
+                .from('meses')
+                .select('*')
+                .ilike('nome', nome)
+                .eq('ano', ano)
+                .maybeSingle();
+
+              if (existing) return existing;
+
+              try {
+                const { data: created, error } = await supabaseClient
+                  .from('meses')
+                  .insert([{ nome, ano, status: 'provisionamento' }])
+                  .select()
+                  .single();
+                
+                if (!error && created) return created;
+
+                const { data: createdAtivo } = await supabaseClient
+                  .from('meses')
+                  .insert([{ nome, ano, status: 'ativo' }])
+                  .select()
+                  .single();
+                
+                return createdAtivo;
+              } catch (e) {
+                return null;
+              }
+            };
+
+            const nextMonth = await getOrCreateMonth(nextMonthName, nextYear);
+            if (nextMonth) {
+              const originalDateStr = formData.date;
+              let nextMonthDate = originalDateStr;
+              try {
+                const parts = originalDateStr.split('-');
+                if (parts.length === 3) {
+                  let dYear = nextYear;
+                  let dMonth = String(nextIdx + 1).padStart(2, '0');
+                  let dDay = parts[2];
+                  const maxDays = new Date(dYear, nextIdx + 1, 0).getDate();
+                  if (parseInt(dDay, 10) > maxDays) {
+                    dDay = String(maxDays).padStart(2, '0');
+                  }
+                  nextMonthDate = `${dYear}-${dMonth}-${dDay}`;
+                }
+              } catch (e) {
+                console.error("Error setting next month date:", e);
+              }
+
+              const nextPayload: any = {
+                mes_id: nextMonth.id,
+                descricao: formData.desc,
+                data: nextMonthDate,
+                pago: false
+              };
+
+              if (activeTab === 'contas') {
+                nextPayload.valor = val;
+                await supabaseClient.from('despesas_contas').insert([nextPayload]);
+              } else {
+                const selectedTax = formData.tax;
+                const finalVal = val + (val * (selectedTax / 100));
+                nextPayload.valor_original = val;
+                nextPayload.taxa_percentual = selectedTax;
+                nextPayload.valor_final = finalVal;
+                await supabaseClient.from('despesas_pix_credito').insert([nextPayload]);
+              }
+            }
+          }
+        } catch (repErr) {
+          console.error("Erro ao replicar despesa para o próximo mês:", repErr);
+        }
+      }
+
       setShowModal(false);
       setEditingId(null);
       setFormData({ 
@@ -163,7 +251,8 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         val: 'R$ 0,00', 
         date: new Date().toISOString().split('T')[0],
         tax: 4.99,
-        pago: false
+        pago: false,
+        programarProximo: false
       });
       fetchData();
     } catch (err: any) {
@@ -358,6 +447,28 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                   }`}
                 >
                   {formData.pago ? 'Pago' : 'Pendente'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`p-2 rounded-lg ${formData.programarProximo ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <CalendarClock size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest block leading-none">Replicar Próximo Mês</span>
+                    <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wide block mt-1 truncate">Programar no mês seguinte</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, programarProximo: !formData.programarProximo })}
+                  className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${
+                    formData.programarProximo 
+                      ? 'bg-blue-700 text-white' 
+                      : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {formData.programarProximo ? 'Ativado' : 'Não'}
                 </button>
               </div>
               {activeTab === 'pix' && (

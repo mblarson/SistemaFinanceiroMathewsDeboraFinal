@@ -39,7 +39,27 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         .select('*')
         .eq('mes_id', currentMonth.id)
         .order('criado_em', { ascending: false });
-      setInstallments(data || []);
+      
+      const sorted = (data || []).slice().sort((a, b) => {
+        const restA = (a.total_parcelas ?? 1) - (a.parcela_atual ?? 1);
+        const restB = (b.total_parcelas ?? 1) - (b.parcela_atual ?? 1);
+        
+        if (restA !== restB) {
+          return restA - restB;
+        }
+        
+        const totalA = a.total_parcelas ?? 1;
+        const totalB = b.total_parcelas ?? 1;
+        if (totalA !== totalB) {
+          return totalA - totalB;
+        }
+        
+        const descA = a.descricao || '';
+        const descB = b.descricao || '';
+        return descA.localeCompare(descB);
+      });
+
+      setInstallments(sorted);
     } catch (error) {
       console.error("Erro ao buscar parcelamentos:", error);
     } finally {

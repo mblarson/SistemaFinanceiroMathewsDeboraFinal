@@ -287,7 +287,8 @@ const createResilientChain = (realChain: any, tableName: string, steps: ChainSte
         return function(onfulfilled: any, onrejected: any) {
           return target.then(
             (res: any) => {
-              if (res && res.error && isNetworkError(res.error)) {
+              if (res && res.error) {
+                console.warn(`Supabase query returned error for ${tableName}, falling back to offline:`, res.error);
                 return executeOfflineQuery(steps, tableName).then(onfulfilled, onrejected);
               }
               if (res && !res.error && res.data) {
@@ -300,10 +301,8 @@ const createResilientChain = (realChain: any, tableName: string, steps: ChainSte
               return onfulfilled ? onfulfilled(res) : res;
             },
             (err: any) => {
-              if (isNetworkError(err)) {
-                return executeOfflineQuery(steps, tableName).then(onfulfilled, onrejected);
-              }
-              return onrejected ? onrejected(err) : Promise.reject(err);
+              console.warn(`Supabase promise rejected for ${tableName}, falling back to offline:`, err);
+              return executeOfflineQuery(steps, tableName).then(onfulfilled, onrejected);
             }
           );
         };
