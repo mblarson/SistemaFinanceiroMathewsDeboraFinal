@@ -24,6 +24,19 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        @keyframes borderGlow {
+          0%, 100% {
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+          }
+          50% {
+            border-color: rgba(59, 130, 246, 1);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.45);
+          }
+        }
+        .animate-border-glow {
+          animation: borderGlow 3.5s infinite ease-in-out;
+        }
     </style>
     <script>
       window.tailwind = window.tailwind || {};

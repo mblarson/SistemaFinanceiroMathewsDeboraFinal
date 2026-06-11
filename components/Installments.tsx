@@ -203,6 +203,9 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   };
 
   const totalParcelasMes = installments.reduce((acc, item) => acc + (item.valor_parcela ?? 0), 0);
+  const totalUltimaParcelaMes = installments
+    .filter(item => (item.parcela_atual ?? 1) === (item.total_parcelas ?? 1))
+    .reduce((acc, item) => acc + (item.valor_parcela ?? 0), 0);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -214,26 +217,49 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       ) : (
         <>
           {installments.length > 0 && (
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mb-6 bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
-              <div className="flex items-center gap-3.5">
-                <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
-                  <CalendarClock size={24} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Total de Parcelas em {currentMonth.nome}</p>
-                  <p className="text-2xl font-black text-emerald-800 tracking-tight">{formatCurrency(totalParcelasMes)}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {/* Total Geral de Parcelas */}
+              <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
+                    <CalendarClock size={24} />
+                  </div>
+                  <div>
+                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5 leading-none">Total Geral de Parcelas</h5>
+                    <p className="text-xl font-black text-emerald-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalParcelasMes)}</p>
+                  </div>
                 </div>
               </div>
-              
-              {canEdit && (
-                <button 
-                  onClick={projectFutureInstallments}
-                  disabled={projecting}
-                  className="flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-md cursor-pointer self-start sm:self-auto shrink-0"
-                >
-                  <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
-                  {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
-                </button>
+
+              {/* Parcelas acabando esse mês */}
+              <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 shrink-0">
+                    <CalendarClock size={24} />
+                  </div>
+                  <div>
+                    <h5 className="text-[10px] font-black text-gray-450 uppercase tracking-widest mb-0.5 leading-none">Parcelas acabando esse mês</h5>
+                    <p className="text-xl font-black text-blue-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalUltimaParcelaMes)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de Projetar */}
+              {canEdit ? (
+                <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center">
+                  <button 
+                    onClick={projectFutureInstallments}
+                    disabled={projecting}
+                    className="w-full h-full min-h-[48px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
+                  >
+                    <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
+                    {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-gray-50/50 p-5 rounded-3xl border border-dashed border-gray-200 flex items-center justify-center">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mês Fechado para Edição</p>
+                </div>
               )}
             </div>
           )}
@@ -256,13 +282,31 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               // Total para quitação: considera o que falta pagar (restantes)
               const totalQuitacao = pValor * restantes;
 
+              const isLast = pAtual === pTotal;
+
               return (
-                <div key={item.id} className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm flex flex-col">
+                <div 
+                  key={item.id} 
+                  className={`bg-white rounded-3xl p-5 border flex flex-col transition-all relative ${
+                    isLast 
+                      ? 'border-blue-500 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
+                      : 'border-gray-100 shadow-sm'
+                  }`}
+                >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="bg-blue-50 p-2 rounded-xl text-blue-600 shrink-0"><CalendarClock size={18} /></div>
+                      <div className={`p-2 rounded-xl shrink-0 ${isLast ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                        <CalendarClock size={18} />
+                      </div>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-gray-800 text-sm truncate">{item.descricao}</h4>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <h4 className="font-black text-gray-800 text-sm truncate max-w-[120px]" title={item.descricao}>{item.descricao}</h4>
+                          {isLast && (
+                            <span className="bg-blue-600 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm animate-pulse-subtle">
+                              ÚLTIMA
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Pagas: {pagas}/{pTotal}</p>
                       </div>
                     </div>
