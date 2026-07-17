@@ -78,10 +78,12 @@ const Calculator: React.FC = () => {
       faturamentoLiquido: net,
     });
 
-    // Auto scroll to results
-    setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    // Auto scroll to results only on mobile (stacked layout)
+    if (window.innerWidth < 1024) {
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
   };
 
   // CLT calculation rules
@@ -269,10 +271,12 @@ const Calculator: React.FC = () => {
     const res = calculateCLT(gross, prod, dependents, otherDeductions, cltYear);
     setCltResults(res);
 
-    // Auto scroll to results
-    setTimeout(() => {
-      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    // Auto scroll to results only on mobile (stacked layout)
+    if (window.innerWidth < 1024) {
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
   };
 
   const getINSSAliquot = (base: number, year: '2024' | '2025' = '2024') => {
