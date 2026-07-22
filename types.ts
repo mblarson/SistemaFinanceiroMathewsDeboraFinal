@@ -24,6 +24,13 @@ export interface Revenue {
   data: string;
 }
 
+export interface AbastecimentoItem {
+  id: string | number;
+  data: string;
+  valor: number;
+  criado_em?: string;
+}
+
 export interface Expense {
   id: number;
   mes_id: number;
@@ -31,6 +38,7 @@ export interface Expense {
   valor: number;
   pago: boolean;
   data: string;
+  historico_abastecimentos?: AbastecimentoItem[];
 }
 
 export interface PixExpense {

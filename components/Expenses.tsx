@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, TrendingUp, CalendarClock } from 'lucide-react';
+import { Receipt, Zap, Trash2, CheckCircle2, Circle, Pencil, X as LucideX, TrendingUp, CalendarClock, Fuel, Plus, AlertTriangle } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
-import { Month, Expense, PixExpense } from '../types';
+import { Month, Expense, PixExpense, AbastecimentoItem } from '../types';
 
 interface ExpensesProps {
   currentMonth: Month;
@@ -40,6 +40,122 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
     programarProximo: false
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // States para Modal de Abastecimento (GASOLINA)
+  const [selectedGasolineExpense, setSelectedGasolineExpense] = useState<Expense | null>(null);
+  const [showAbastecimentoModal, setShowAbastecimentoModal] = useState<boolean>(false);
+  const [abastecimentoForm, setAbastecimentoForm] = useState({
+    val: 'R$ 0,00',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [submittingAbastecimento, setSubmittingAbastecimento] = useState<boolean>(false);
+  const [itemToDeleteAbastecimento, setItemToDeleteAbastecimento] = useState<AbastecimentoItem | null>(null);
+
+  const isGasolinaExpense = (desc: string) => {
+    if (!desc) return false;
+    return desc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("gasolina");
+  };
+
+  const getHistorico = (exp: Expense): AbastecimentoItem[] => {
+    if (!exp.historico_abastecimentos) return [];
+    if (Array.isArray(exp.historico_abastecimentos)) return exp.historico_abastecimentos;
+    try {
+      return JSON.parse(exp.historico_abastecimentos as any);
+    } catch {
+      return [];
+    }
+  };
+
+  const openAbastecimentoModal = (exp: Expense) => {
+    setSelectedGasolineExpense(exp);
+    setAbastecimentoForm({
+      val: 'R$ 0,00',
+      date: new Date().toISOString().split('T')[0]
+    });
+    setShowAbastecimentoModal(true);
+  };
+
+  const handleAddAbastecimento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGasolineExpense || submittingAbastecimento) return;
+
+    const valAbastecimento = parseCurrency(abastecimentoForm.val);
+    if (valAbastecimento <= 0) return;
+
+    setSubmittingAbastecimento(true);
+    try {
+      const currentVal = selectedGasolineExpense.valor;
+      const newVal = Math.max(0, Number((currentVal - valAbastecimento).toFixed(2)));
+      const existingHist = getHistorico(selectedGasolineExpense);
+      const newHistItem: AbastecimentoItem = {
+        id: Date.now().toString(),
+        data: abastecimentoForm.date,
+        valor: valAbastecimento,
+        criado_em: new Date().toISOString()
+      };
+      const updatedHist = [newHistItem, ...existingHist];
+
+      const { error } = await supabaseClient
+        .from('despesas_contas')
+        .update({
+          valor: newVal,
+          historico_abastecimentos: updatedHist
+        })
+        .eq('id', selectedGasolineExpense.id);
+
+      if (error) throw error;
+
+      setSelectedGasolineExpense({
+        ...selectedGasolineExpense,
+        valor: newVal,
+        historico_abastecimentos: updatedHist
+      });
+      setAbastecimentoForm({
+        val: 'R$ 0,00',
+        date: new Date().toISOString().split('T')[0]
+      });
+      fetchData();
+    } catch (err: any) {
+      alert("Erro ao registrar abastecimento: " + (err.message || err));
+    } finally {
+      setSubmittingAbastecimento(false);
+    }
+  };
+
+  const confirmDeleteAbastecimento = async () => {
+    if (!selectedGasolineExpense || !itemToDeleteAbastecimento || submittingAbastecimento) return;
+
+    const itemToDelete = itemToDeleteAbastecimento;
+    setSubmittingAbastecimento(true);
+    try {
+      const currentVal = selectedGasolineExpense.valor;
+      const newVal = Number((currentVal + itemToDelete.valor).toFixed(2));
+      const existingHist = getHistorico(selectedGasolineExpense);
+      const updatedHist = existingHist.filter((item) => String(item.id) !== String(itemToDelete.id));
+
+      const { error } = await supabaseClient
+        .from('despesas_contas')
+        .update({
+          valor: newVal,
+          historico_abastecimentos: updatedHist
+        })
+        .eq('id', selectedGasolineExpense.id);
+
+      if (error) throw error;
+
+      setSelectedGasolineExpense({
+        ...selectedGasolineExpense,
+        valor: newVal,
+        historico_abastecimentos: updatedHist
+      });
+      setItemToDeleteAbastecimento(null);
+      fetchData();
+    } catch (err: any) {
+      alert("Erro ao excluir abastecimento: " + (err.message || err));
+    } finally {
+      setSubmittingAbastecimento(false);
+    }
+  };
 
   useEffect(() => {
     fetchPixConfig();
@@ -606,6 +722,23 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                       )}
                     </div>
                   </div>
+
+                  {isGasolinaExpense(exp.descricao) && (
+                    <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => openAbastecimentoModal(exp)}
+                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider py-1.5 px-3 rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Fuel size={14} />
+                        Abastecer
+                      </button>
+                      {getHistorico(exp).length > 0 && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          {getHistorico(exp).length} {getHistorico(exp).length === 1 ? 'abastecimento' : 'abastecimentos'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -758,6 +891,167 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ABASTECIMENTO (GASOLINA) */}
+      {showAbastecimentoModal && selectedGasolineExpense && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 lg:p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-amber-100 text-amber-700 p-3 rounded-2xl">
+                  <Fuel size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
+                    Registrar Abastecimento
+                  </h3>
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                    {selectedGasolineExpense.descricao}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAbastecimentoModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                <LucideX size={20} />
+              </button>
+            </div>
+
+            {/* Valor Atual da Despesa */}
+            <div className="bg-amber-50/70 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Saldo Atual da Despesa</p>
+                <p className="text-xl font-black text-amber-950 mt-0.5">{formatCurrency(selectedGasolineExpense.valor)}</p>
+              </div>
+              <p className="text-[10px] font-bold text-amber-700 uppercase max-w-[120px] text-right">
+                O valor será subtraído deste saldo
+              </p>
+            </div>
+
+            <form onSubmit={handleAddAbastecimento} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                  Valor do Abastecimento (R$) *
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={abastecimentoForm.val}
+                  onChange={(e) => setAbastecimentoForm({ ...abastecimentoForm, val: maskCurrency(e.target.value) })}
+                  placeholder="R$ 0,00"
+                  required
+                  className="w-full bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-xl px-4 py-3 text-lg font-black text-gray-900 outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">
+                  Data do Abastecimento *
+                </label>
+                <input
+                  type="date"
+                  value={abastecimentoForm.date}
+                  onChange={(e) => setAbastecimentoForm({ ...abastecimentoForm, date: e.target.value })}
+                  required
+                  className="w-full bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none transition-all"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingAbastecimento || parseCurrency(abastecimentoForm.val) <= 0}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-3.5 rounded-xl uppercase tracking-wider text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Plus size={16} />
+                {submittingAbastecimento ? 'Salvando...' : 'Confirmar & Abater Saldo'}
+              </button>
+            </form>
+
+            {/* Histórico de Abastecimentos */}
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-gray-800">
+                Histórico de Abastecimentos ({getHistorico(selectedGasolineExpense).length})
+              </h4>
+              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                {getHistorico(selectedGasolineExpense).length === 0 ? (
+                  <p className="text-[11px] text-gray-400 font-medium text-center py-3 uppercase tracking-wider">
+                    Nenhum abastecimento registrado ainda.
+                  </p>
+                ) : (
+                  getHistorico(selectedGasolineExpense).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between bg-gray-50 p-3 rounded-xl text-xs font-bold border border-gray-100"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Fuel size={14} className="text-amber-600" />
+                        <span className="text-gray-600">{formatDateSafe(item.data)}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-amber-700 font-black">-{formatCurrency(item.valor)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setItemToDeleteAbastecimento(item)}
+                          title="Excluir Abastecimento"
+                          className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE ABASTECIMENTO (DO PRÓPRIO SISTEMA) */}
+      {itemToDeleteAbastecimento && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-center border border-gray-100">
+            <div className="bg-rose-100 text-rose-600 p-3.5 rounded-2xl w-12 h-12 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
+                Excluir Abastecimento?
+              </h3>
+              <p className="text-xs font-semibold text-gray-500 leading-relaxed">
+                Deseja realmente remover o abastecimento de{' '}
+                <strong className="text-gray-900 font-black">{formatCurrency(itemToDeleteAbastecimento.valor)}</strong> registrado no dia{' '}
+                <strong className="text-gray-900 font-black">{formatDateSafe(itemToDeleteAbastecimento.data)}</strong>?
+              </p>
+              <div className="bg-amber-50 border border-amber-200/60 p-2.5 rounded-xl text-[11px] font-bold text-amber-800 mt-2">
+                O valor de {formatCurrency(itemToDeleteAbastecimento.valor)} será somado de volta ao saldo da despesa.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDeleteAbastecimento(null)}
+                disabled={submittingAbastecimento}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAbastecimento}
+                disabled={submittingAbastecimento}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-rose-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Trash2 size={15} />
+                {submittingAbastecimento ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
           </div>
         </div>
       )}

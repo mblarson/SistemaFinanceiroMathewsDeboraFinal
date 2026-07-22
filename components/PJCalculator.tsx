@@ -13,25 +13,20 @@ import {
   Building2,
   CheckCircle2,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { calcularPJ2026, PJResult2026 } from '../utils/pjCalculator2026';
+import { updateSalaryRevenue } from '../utils/salaryUpdater';
 
-export interface PJResult {
-  faturamento: number;
-  proLabore: number;
-  dasSimples: number;
-  darf: number;
-  totalImpostos: number;
-  faturamentoLiquido: number;
-  percentualImpostos: number;
-  proLaborePercentual: number;
-  lucroIsento: number;
-}
+export type PJResult = PJResult2026;
 
 const PJCalculator: React.FC = () => {
   const [invoiceValue, setInvoiceValue] = useState<string>('');
   const [results, setResults] = useState<PJResult | null>(null);
   const [showMemoria, setShowMemoria] = useState<boolean>(true);
+  const [updatingSalary, setUpdatingSalary] = useState<boolean>(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -49,39 +44,26 @@ const PJCalculator: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
   };
 
-  // Cálculo da PJ mantendo RIGOROSAMENTE a mesma lógica original
   const handleCalculate = (e: React.FormEvent) => {
     e.preventDefault();
     const f = parseFloat(invoiceValue.replace(/[^\d]/g, '')) / 100 || 0;
-
     if (f <= 0) return;
 
-    // Arredondamento exato para 2 casas decimais em cada etapa (igual ao original)
-    const p = Math.round(f * 28) / 100; // Pró-labore (28% sobre o valor da nota)
-    const das = Math.round(f * 6) / 100; // DAS Simples (6% sobre o valor da nota)
-    const darf = Math.round(p * 11) / 100; // DARF (11% sobre o valor do Pró-labore)
-
-    // O total de impostos é a soma das partes já arredondadas
-    const tax = Number((das + darf).toFixed(2));
-    const net = Number((f - tax).toFixed(2));
-    const percentualImpostos = f > 0 ? Number(((tax / f) * 100).toFixed(2)) : 0;
-    const lucroIsento = Number((net - p).toFixed(2));
-
-    setResults({
-      faturamento: f,
-      proLabore: p,
-      dasSimples: das,
-      darf: darf,
-      totalImpostos: tax,
-      faturamentoLiquido: net,
-      percentualImpostos,
-      proLaborePercentual: 28,
-      lucroIsento,
-    });
+    const res = calcularPJ2026({ faturamento: f });
+    setResults(res);
 
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
+  };
+
+  const handleUpdateSalary = async () => {
+    if (!results) return;
+    setUpdatingSalary(true);
+    setUpdateMessage(null);
+    const res = await updateSalaryRevenue('debora', results.faturamentoLiquido);
+    setUpdateMessage(res.message);
+    setUpdatingSalary(false);
   };
 
   // Preparação de dados para o Gráfico de Rosca (Donut Chart)
@@ -221,6 +203,28 @@ const PJCalculator: React.FC = () => {
                     <p className="text-sm lg:text-base font-black text-amber-400 mt-0.5">{results.percentualImpostos.toFixed(2)}%</p>
                   </div>
                 </div>
+
+                {/* BOTÃO ATUALIZAR SALÁRIO */}
+                <div className="mt-4 pt-4 border-t border-gray-700/60 flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUpdateSalary}
+                    disabled={updatingSalary}
+                    className="w-full bg-white hover:bg-gray-100 text-gray-900 font-black py-3 px-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2.5 uppercase tracking-wider text-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw size={16} className={updatingSalary ? 'animate-spin' : ''} />
+                    {updatingSalary ? 'Sincronizando Banco...' : 'Atualizar Salário'}
+                  </button>
+                  {updateMessage && (
+                    <div className={`w-full p-3 rounded-xl text-[11px] font-bold text-center leading-tight animate-in fade-in ${
+                      updateMessage.includes('Erro') 
+                        ? 'bg-rose-500/20 text-rose-200 border border-rose-500/30' 
+                        : 'bg-emerald-500/30 text-emerald-100 border border-emerald-400/30'
+                    }`}>
+                      {updateMessage}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* GRÁFICO DE COMPOSIÇÃO (Donut Chart) */}
@@ -285,7 +289,7 @@ const PJCalculator: React.FC = () => {
             <div className="flex items-center gap-3">
               <FileText size={20} className="text-blue-400" />
               <div className="text-left">
-                <h3 className="text-sm lg:text-base font-black uppercase tracking-wider">Ver Memória de Cálculo PJ</h3>
+                <h3 className="text-sm lg:text-base font-black uppercase tracking-wider">Ver Memória de CÁLCULO PJ</h3>
                 <p className="text-[10px] text-gray-400 uppercase tracking-widest">Detalhamento de Faturamento, Pró-labore e Impostos</p>
               </div>
             </div>
@@ -294,60 +298,79 @@ const PJCalculator: React.FC = () => {
 
           {showMemoria && (
             <div className="p-6 lg:p-8 space-y-6">
-              {/* Tabela de Holerite PJ */}
+              {/* Tabela de Holerite PJ Adaptativa */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-gray-200 text-gray-400 font-black uppercase tracking-wider text-[10px]">
-                      <th className="pb-3">Item / Imposto</th>
-                      <th className="pb-3 text-center">Alíquota Base</th>
-                      <th className="pb-3 text-center">Base de Cálculo</th>
-                      <th className="pb-3 text-right">Proventos (R$)</th>
-                      <th className="pb-3 text-right">Descontos / Impostos (R$)</th>
+                      <th className="pb-3 text-left pr-2">Item / Imposto</th>
+                      <th className="pb-3 text-center hidden md:table-cell">Alíquota Base</th>
+                      <th className="pb-3 text-center hidden md:table-cell">Base de CÁLCULO</th>
+                      <th className="pb-3 text-right hidden md:table-cell">Proventos (R$)</th>
+                      <th className="pb-3 text-right pl-2">
+                        <span className="hidden md:inline">Descontos / Impostos (R$)</span>
+                        <span className="md:hidden">Valores (R$)</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-medium">
                     <tr className="hover:bg-gray-50/60">
-                      <td className="py-3 font-bold text-gray-900">Valor Bruto da Nota Fiscal</td>
-                      <td className="py-3 text-center text-gray-400">-</td>
-                      <td className="py-3 text-center text-gray-400">-</td>
-                      <td className="py-3 text-right font-bold text-gray-900">{formatCurrency(results.faturamento)}</td>
-                      <td className="py-3 text-right text-gray-400">-</td>
+                      <td className="py-3 font-bold text-gray-900 pr-2">Valor Bruto da Nota Fiscal</td>
+                      <td className="py-3 text-center text-gray-400 hidden md:table-cell">-</td>
+                      <td className="py-3 text-center text-gray-400 hidden md:table-cell">-</td>
+                      <td className="py-3 text-right font-bold text-gray-900 hidden md:table-cell">{formatCurrency(results.faturamento)}</td>
+                      <td className="py-3 text-right font-bold text-emerald-700 md:text-gray-400 pl-2 whitespace-nowrap">
+                        <span className="md:hidden text-emerald-700">+</span> {formatCurrency(results.faturamento)}
+                      </td>
                     </tr>
 
                     <tr className="hover:bg-gray-50/60">
-                      <td className="py-3 font-bold text-blue-700">Pró-labore (Retirada Obrigatória)</td>
-                      <td className="py-3 text-center font-bold text-gray-700">28,00%</td>
-                      <td className="py-3 text-center text-gray-600">{formatCurrency(results.faturamento)}</td>
-                      <td className="py-3 text-right font-bold text-blue-700">{formatCurrency(results.proLabore)}</td>
-                      <td className="py-3 text-right text-gray-400">-</td>
+                      <td className="py-3 font-bold text-blue-700 pr-2">Pró-labore (Retirada Obrigatória)</td>
+                      <td className="py-3 text-center font-bold text-gray-700 hidden md:table-cell">28,00%</td>
+                      <td className="py-3 text-center text-gray-600 hidden md:table-cell">{formatCurrency(results.faturamento)}</td>
+                      <td className="py-3 text-right font-bold text-blue-700 hidden md:table-cell">{formatCurrency(results.proLabore)}</td>
+                      <td className="py-3 text-right font-bold text-blue-700 md:text-gray-400 pl-2 whitespace-nowrap">
+                        <span className="md:hidden text-blue-700">+</span> {formatCurrency(results.proLabore)}
+                      </td>
                     </tr>
 
                     <tr className="hover:bg-gray-50/60">
-                      <td className="py-3 font-bold text-amber-700">DAS Simples Nacional</td>
-                      <td className="py-3 text-center font-bold text-gray-700">6,00%</td>
-                      <td className="py-3 text-center text-gray-600">{formatCurrency(results.faturamento)}</td>
-                      <td className="py-3 text-right text-gray-400">-</td>
-                      <td className="py-3 text-right font-bold text-amber-700">{formatCurrency(results.dasSimples)}</td>
+                      <td className="py-3 font-bold text-amber-700 pr-2">DAS Simples Nacional</td>
+                      <td className="py-3 text-center font-bold text-gray-700 hidden md:table-cell">6,00%</td>
+                      <td className="py-3 text-center text-gray-600 hidden md:table-cell">{formatCurrency(results.faturamento)}</td>
+                      <td className="py-3 text-right text-gray-400 hidden md:table-cell">-</td>
+                      <td className="py-3 text-right font-bold text-amber-700 pl-2 whitespace-nowrap">-{formatCurrency(results.dasSimples)}</td>
                     </tr>
 
                     <tr className="hover:bg-gray-50/60">
-                      <td className="py-3 font-bold text-rose-700">DARF INSS (s/ Pró-labore)</td>
-                      <td className="py-3 text-center font-bold text-gray-700">11,00%</td>
-                      <td className="py-3 text-center text-gray-600">{formatCurrency(results.proLabore)}</td>
-                      <td className="py-3 text-right text-gray-400">-</td>
-                      <td className="py-3 text-right font-bold text-rose-700">{formatCurrency(results.darf)}</td>
+                      <td className="py-3 font-bold text-rose-700 pr-2">DARF INSS (s/ Pró-labore)</td>
+                      <td className="py-3 text-center font-bold text-gray-700 hidden md:table-cell">11,00%</td>
+                      <td className="py-3 text-center text-gray-600 hidden md:table-cell">{formatCurrency(results.proLabore)}</td>
+                      <td className="py-3 text-right text-gray-400 hidden md:table-cell">-</td>
+                      <td className="py-3 text-right font-bold text-rose-700 pl-2 whitespace-nowrap">-{formatCurrency(results.darf)}</td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-gray-900 font-black text-sm">
+                    <tr className="border-t-2 border-gray-900 font-black text-sm hidden md:table-row">
                       <td colSpan={3} className="pt-4 text-gray-900 uppercase tracking-wider">
                         Totais
                       </td>
                       <td className="pt-4 text-right text-emerald-700">{formatCurrency(results.faturamento)}</td>
                       <td className="pt-4 text-right text-rose-700">{formatCurrency(results.totalImpostos)}</td>
                     </tr>
-                    <tr className="bg-emerald-50/80 font-black text-base border-t border-emerald-200">
+                    {/* Mobile: Card empilhado em duas linhas */}
+                    <tr className="bg-emerald-50/80 font-black border-t-2 border-emerald-300 md:hidden">
+                      <td colSpan={2} className="py-4 px-3 text-center">
+                        <div className="text-2xl font-black text-emerald-950 tracking-tight">
+                          {formatCurrency(results.faturamentoLiquido)}
+                        </div>
+                        <div className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest mt-1">
+                          Valor Líquido Atualizado
+                        </div>
+                      </td>
+                    </tr>
+                    {/* Desktop: Linha única original */}
+                    <tr className="bg-emerald-50/80 font-black text-base border-t border-emerald-200 hidden md:table-row">
                       <td colSpan={3} className="py-3 px-2 text-emerald-950 uppercase tracking-widest">
                         Faturamento Líquido Final
                       </td>
