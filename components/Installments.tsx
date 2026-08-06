@@ -31,47 +31,6 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   }, [triggerAdd]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { data } = await supabaseClient
-        .from('parcelamentos')
-        .select('*')
-        .eq('mes_id', currentMonth.id)
-        .order('criado_em', { ascending: false });
-      
-      const sorted = (data || []).slice().sort((a, b) => {
-        const restA = (a.total_parcelas ?? 1) - (a.parcela_atual ?? 1);
-        const restB = (b.total_parcelas ?? 1) - (b.parcela_atual ?? 1);
-        
-        if (restA !== restB) {
-          return restA - restB;
-        }
-        
-        const totalA = a.total_parcelas ?? 1;
-        const totalB = b.total_parcelas ?? 1;
-        if (totalA !== totalB) {
-          return totalA - totalB;
-        }
-        
-        const descA = a.descricao || '';
-        const descB = b.descricao || '';
-        const descComp = descA.localeCompare(descB);
-        if (descComp !== 0) {
-          return descComp;
-        }
-
-        return (a.id ?? 0) - (b.id ?? 0);
-      });
-
-      setInstallments(sorted);
-    } catch (error) {
-      console.error("Erro ao buscar parcelamentos:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const maskCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const amount = Number(digits) / 100;
@@ -131,14 +90,229 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   const canEdit = currentMonth.status !== 'fechado';
 
+  const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+
+  const getMonthIndex = (nome: string) => meses_nomes.indexOf((nome || '').trim().toUpperCase());
+
+  // Helper para buscar ou criar mês com status 'ativo' (evita erro de check constraint 'meses_status_check')
+  const getOrCreateMonth = async (nome: string, ano: number): Promise<Month | null> => {
+    const nomeUpper = nome.toUpperCase();
+    const { data: existing } = await supabaseClient
+      .from('meses')
+      .select('*')
+      .ilike('nome', nomeUpper)
+      .eq('ano', ano)
+      .maybeSingle();
+
+    if (existing) return existing;
+
+    // Tenta criar como 'ativo' (compatível com a constraint do Postgres)
+    const { data: createdAtivo, error: errAtivo } = await supabaseClient
+      .from('meses')
+      .insert([{ nome: nomeUpper, ano, status: 'ativo' }])
+      .select()
+      .single();
+
+    if (!errAtivo && createdAtivo) return createdAtivo;
+
+    // Fallback tenta 'provisionamento'
+    const { data: createdProv, error: errProv } = await supabaseClient
+      .from('meses')
+      .insert([{ nome: nomeUpper, ano, status: 'provisionamento' }])
+      .select()
+      .single();
+
+    if (!errProv && createdProv) return createdProv;
+
+    console.error("Erro ao criar mês de destino:", errAtivo || errProv);
+    return null;
+  };
+
+  // Helper para buscar parcelas ativas do mês anterior mais próximo que possua dados
+  const fetchPrecedingMonthInstallments = async (targetMonth: Month) => {
+    try {
+      const { data: allMonths } = await supabaseClient
+        .from('meses')
+        .select('*')
+        .order('ano', { ascending: true });
+
+      if (!allMonths) return null;
+
+      const targetIdx = getMonthIndex(targetMonth.nome);
+      if (targetIdx === -1) return null;
+      const targetVal = targetMonth.ano * 12 + targetIdx;
+
+      const precMonths = allMonths
+        .filter(m => (m.ano * 12 + getMonthIndex(m.nome)) < targetVal)
+        .sort((a, b) => (b.ano * 12 + getMonthIndex(b.nome)) - (a.ano * 12 + getMonthIndex(a.nome)));
+
+      for (const pm of precMonths) {
+        const { data: pData } = await supabaseClient
+          .from('parcelamentos')
+          .select('*')
+          .eq('mes_id', pm.id);
+
+        if (pData && pData.length > 0) {
+          const pmIdx = getMonthIndex(pm.nome);
+          const pmVal = pm.ano * 12 + pmIdx;
+          const diffMonths = targetVal - pmVal;
+
+          return {
+            sourceMonth: pm,
+            diffMonths,
+            installments: pData
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Erro ao buscar parcelas do mês anterior:", e);
+    }
+    return null;
+  };
+
+  // Auto-sincroniza parcelas para um mês que não tem registros ainda
+  const autoSyncFromPrecedingMonth = async (targetMonth: Month): Promise<Installment[]> => {
+    const precInfo = await fetchPrecedingMonthInstallments(targetMonth);
+    if (!precInfo) return [];
+
+    const { diffMonths, installments: precInstallments } = precInfo;
+
+    const toInsert = precInstallments
+      .filter(p => ((p.parcela_atual ?? 1) + diffMonths) <= (p.total_parcelas ?? 1))
+      .map(p => ({
+        mes_id: targetMonth.id,
+        descricao: p.descricao,
+        valor_parcela: p.valor_parcela,
+        parcela_atual: (p.parcela_atual ?? 1) + diffMonths,
+        total_parcelas: p.total_parcelas
+      }));
+
+    if (toInsert.length > 0) {
+      const { data: inserted, error } = await supabaseClient
+        .from('parcelamentos')
+        .insert(toInsert)
+        .select();
+
+      if (!error && inserted) {
+        return inserted;
+      }
+    }
+    return [];
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabaseClient
+        .from('parcelamentos')
+        .select('*')
+        .eq('mes_id', currentMonth.id)
+        .order('criado_em', { ascending: false });
+      
+      let currentInstallments = data || [];
+
+      // Se o mês atual não tem parcelas, tenta auto-sincronizar do mês anterior ativo
+      if (currentInstallments.length === 0 && currentMonth.id !== -1) {
+        const synced = await autoSyncFromPrecedingMonth(currentMonth);
+        if (synced && synced.length > 0) {
+          currentInstallments = synced;
+        }
+      }
+
+      const sorted = currentInstallments.slice().sort((a, b) => {
+        const restA = (a.total_parcelas ?? 1) - (a.parcela_atual ?? 1);
+        const restB = (b.total_parcelas ?? 1) - (b.parcela_atual ?? 1);
+        
+        if (restA !== restB) {
+          return restA - restB;
+        }
+        
+        const totalA = a.total_parcelas ?? 1;
+        const totalB = b.total_parcelas ?? 1;
+        if (totalA !== totalB) {
+          return totalA - totalB;
+        }
+        
+        const descA = a.descricao || '';
+        const descB = b.descricao || '';
+        const descComp = descA.localeCompare(descB);
+        if (descComp !== 0) {
+          return descComp;
+        }
+
+        return (a.id ?? 0) - (b.id ?? 0);
+      });
+
+      setInstallments(sorted);
+    } catch (error) {
+      console.error("Erro ao buscar parcelamentos:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const projectForMonth = async (targetMonthId: number, sourceInstallments: Installment[], increment: number) => {
+    // Busca registros existentes no mês de destino para evitar duplicidades
+    const { data: existingInTarget } = await supabaseClient
+      .from('parcelamentos')
+      .select('descricao, valor_parcela, total_parcelas')
+      .eq('mes_id', targetMonthId);
+    
+    const existingKeys = new Set(
+      (existingInTarget || []).map(i => `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`)
+    );
+
+    const toInsert = sourceInstallments
+      .filter(i => ((i.parcela_atual ?? 1) + increment) <= (i.total_parcelas ?? 1))
+      .filter(i => {
+        const key = `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`;
+        return !existingKeys.has(key);
+      })
+      .map(i => ({
+        mes_id: targetMonthId,
+        descricao: i.descricao,
+        valor_parcela: i.valor_parcela,
+        parcela_atual: (i.parcela_atual ?? 1) + increment,
+        total_parcelas: i.total_parcelas
+      }));
+
+    if (toInsert.length > 0) {
+      const { error } = await supabaseClient.from('parcelamentos').insert(toInsert);
+      if (error) {
+        console.error("Erro ao inserir parcelas projetadas:", error.message);
+        throw error;
+      }
+    }
+  };
+
   const projectFutureInstallments = async () => {
-    if (installments.length === 0) return;
-    if (!confirm("Deseja projetar estes parcelamentos para os próximos 2 meses? Isso criará os registros em Maio e Junho (ou equivalentes) caso ainda não existam.")) return;
+    let baseInstallments = installments;
+
+    // Se o mês atual não tiver parcelas carregadas, busca a base do mês anterior ativo
+    if (baseInstallments.length === 0) {
+      const precInfo = await fetchPrecedingMonthInstallments(currentMonth);
+      if (precInfo && precInfo.installments.length > 0) {
+        // Ajusta as parcelas da base adicionando a diferença de meses até o mês atual
+        baseInstallments = precInfo.installments
+          .filter(p => ((p.parcela_atual ?? 1) + precInfo.diffMonths) <= (p.total_parcelas ?? 1))
+          .map(p => ({
+            ...p,
+            parcela_atual: (p.parcela_atual ?? 1) + precInfo.diffMonths
+          }));
+      }
+    }
+
+    if (baseInstallments.length === 0) {
+      alert("Não há parcelamentos ativos no sistema para projetar.");
+      return;
+    }
+
+    if (!confirm(`Deseja projetar estes parcelamentos para os próximos 2 meses a partir de ${currentMonth.nome}/${currentMonth.ano}?`)) return;
 
     setProjecting(true);
     try {
-      const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
-      let idx = meses_nomes.indexOf(currentMonth.nome.trim().toUpperCase());
+      let idx = getMonthIndex(currentMonth.nome);
+      if (idx === -1) idx = 7; // Fallback Agosto
       
       // M+1
       let nextIdx1 = (idx + 1) % 12;
@@ -150,37 +324,6 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       let nextYear2 = currentMonth.ano + Math.floor((idx + 2) / 12);
       const nextMonthName2 = meses_nomes[nextIdx2];
 
-      const getOrCreateMonth = async (nome: string, ano: number) => {
-        const { data: existing } = await supabaseClient
-          .from('meses')
-          .select('*')
-          .ilike('nome', nome)
-          .eq('ano', ano)
-          .maybeSingle();
-
-        if (existing) return existing;
-
-        try {
-          const { data: created, error } = await supabaseClient
-            .from('meses')
-            .insert([{ nome, ano, status: 'provisionamento' }])
-            .select()
-            .single();
-          
-          if (!error) return created;
-
-          const { data: createdAtivo } = await supabaseClient
-            .from('meses')
-            .insert([{ nome, ano, status: 'ativo' }])
-            .select()
-            .single();
-          
-          return createdAtivo;
-        } catch (e) {
-          return null;
-        }
-      };
-
       const nextMonth1 = await getOrCreateMonth(nextMonthName1, nextYear1);
       const nextMonth2 = await getOrCreateMonth(nextMonthName2, nextYear2);
 
@@ -189,39 +332,16 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         return;
       }
 
-      const projectForMonth = async (targetMonthId: number, increment: number) => {
-        const { data: existingInTarget } = await supabaseClient
-          .from('parcelamentos')
-          .select('descricao')
-          .eq('mes_id', targetMonthId);
-        
-        const existingDescs = new Set(existingInTarget?.map(i => i.descricao) || []);
-
-        const toInsert = installments
-          .filter(i => (i.parcela_atual + increment) <= i.total_parcelas)
-          .filter(i => !existingDescs.has(i.descricao))
-          .map(i => ({
-            mes_id: targetMonthId,
-            descricao: i.descricao,
-            valor_parcela: i.valor_parcela,
-            parcela_atual: (i.parcela_atual || 0) + increment,
-            total_parcelas: i.total_parcelas
-          }));
-
-        if (toInsert.length > 0) {
-          await supabaseClient.from('parcelamentos').insert(toInsert);
-        }
-      };
-
-      await projectForMonth(nextMonth1.id, 1);
+      await projectForMonth(nextMonth1.id, baseInstallments, 1);
       if (nextMonth2) {
-        await projectForMonth(nextMonth2.id, 2);
+        await projectForMonth(nextMonth2.id, baseInstallments, 2);
       }
 
-      alert("Projeção concluída com sucesso para os próximos meses!");
-    } catch (err) {
+      alert(`Projeção concluída com sucesso para os meses futuros (${nextMonthName1}/${nextYear1}` + (nextMonth2 ? ` e ${nextMonthName2}/${nextYear2}` : '') + `)!`);
+      await fetchData();
+    } catch (err: any) {
       console.error("Erro na projeção manual:", err);
-      alert("Ocorreu um erro ao projetar as parcelas.");
+      alert("Ocorreu um erro ao projetar as parcelas: " + (err.message || err));
     } finally {
       setProjecting(false);
     }
@@ -241,53 +361,52 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         </div>
       ) : (
         <>
-          {installments.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              {/* Total Geral de Parcelas */}
-              <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
-                    <CalendarClock size={24} />
-                  </div>
-                  <div>
-                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5 leading-none">Total Geral de Parcelas</h5>
-                    <p className="text-xl font-black text-emerald-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalParcelasMes)}</p>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {/* Total Geral de Parcelas */}
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
+                  <CalendarClock size={24} />
+                </div>
+                <div>
+                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5 leading-none">Total Geral de Parcelas</h5>
+                  <p className="text-xl font-black text-emerald-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalParcelasMes)}</p>
                 </div>
               </div>
-
-              {/* Parcelas acabando esse mês */}
-              <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 shrink-0">
-                    <CalendarClock size={24} />
-                  </div>
-                  <div>
-                    <h5 className="text-[10px] font-black text-gray-450 uppercase tracking-widest mb-0.5 leading-none">Parcelas acabando esse mês</h5>
-                    <p className="text-xl font-black text-blue-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalUltimaParcelaMes)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Botão de Projetar */}
-              {canEdit ? (
-                <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center">
-                  <button 
-                    onClick={projectFutureInstallments}
-                    disabled={projecting}
-                    className="w-full h-full min-h-[48px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
-                  >
-                    <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
-                    {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-gray-50/50 p-5 rounded-3xl border border-dashed border-gray-200 flex items-center justify-center">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mês Fechado para Edição</p>
-                </div>
-              )}
             </div>
-          )}
+
+            {/* Parcelas acabando esse mês */}
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 shrink-0">
+                  <CalendarClock size={24} />
+                </div>
+                <div>
+                  <h5 className="text-[10px] font-black text-gray-450 uppercase tracking-widest mb-0.5 leading-none">Parcelas acabando esse mês</h5>
+                  <p className="text-xl font-black text-blue-800 tracking-tight leading-none mt-1.5">{formatCurrency(totalUltimaParcelaMes)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Botão de Projetar */}
+            {canEdit ? (
+              <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center">
+                <button 
+                  onClick={projectFutureInstallments}
+                  disabled={projecting}
+                  className="w-full h-full min-h-[48px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
+                >
+                  <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
+                  {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
+                </button>
+              </div>
+            ) : (
+              <div className="bg-gray-50/50 p-5 rounded-3xl border border-dashed border-gray-200 flex items-center justify-center">
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mês Fechado para Edição</p>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {installments.length === 0 ? (
             <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">

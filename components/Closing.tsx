@@ -87,36 +87,36 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
     let nextYear2 = currentMonth.ano + Math.floor((idx + 2) / 12);
     const nextMonthName2 = meses_nomes[nextIdx2];
 
-    // Função auxiliar para obter ou criar mês (seguindo lógica do App.tsx)
+    // Função auxiliar para obter ou criar mês (seguindo lógica compatível com Postgres)
     const getOrCreateMonth = async (nome: string, ano: number) => {
+      const nomeUpper = nome.toUpperCase();
       const { data: existing } = await supabaseClient
         .from('meses')
         .select('*')
-        .ilike('nome', nome)
+        .ilike('nome', nomeUpper)
         .eq('ano', ano)
         .maybeSingle();
 
       if (existing) return existing;
 
-      try {
-        const { data: created, error } = await supabaseClient
-          .from('meses')
-          .insert([{ nome, ano, status: 'provisionamento' }])
-          .select()
-          .single();
-        
-        if (!error) return created;
+      const { data: createdAtivo, error: errAtivo } = await supabaseClient
+        .from('meses')
+        .insert([{ nome: nomeUpper, ano, status: 'ativo' }])
+        .select()
+        .single();
 
-        const { data: createdAtivo } = await supabaseClient
-          .from('meses')
-          .insert([{ nome, ano, status: 'ativo' }])
-          .select()
-          .single();
-        
-        return createdAtivo;
-      } catch (e) {
-        return null;
-      }
+      if (!errAtivo && createdAtivo) return createdAtivo;
+
+      const { data: createdProv, error: errProv } = await supabaseClient
+        .from('meses')
+        .insert([{ nome: nomeUpper, ano, status: 'provisionamento' }])
+        .select()
+        .single();
+
+      if (!errProv && createdProv) return createdProv;
+
+      console.error("Erro ao criar mês de destino no encerramento:", errAtivo || errProv);
+      return null;
     };
 
     const nextMonth1 = await getOrCreateMonth(nextMonthName1, nextYear1);
@@ -139,22 +139,27 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
 
     if (installments && installments.length > 0) {
       const projectForMonth = async (targetMonthId: number, increment: number) => {
-        // Busca o que já existe no destino para evitar duplicidade por descrição
+        // Busca o que já existe no destino para evitar duplicidades usando chave composta
         const { data: existingInTarget } = await supabaseClient
           .from('parcelamentos')
-          .select('descricao')
+          .select('descricao, valor_parcela, total_parcelas')
           .eq('mes_id', targetMonthId);
         
-        const existingDescs = new Set(existingInTarget?.map(i => i.descricao) || []);
+        const existingKeys = new Set(
+          (existingInTarget || []).map(i => `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`)
+        );
 
         const toInsert = installments
-          .filter(i => (i.parcela_atual + increment) <= i.total_parcelas)
-          .filter(i => !existingDescs.has(i.descricao))
+          .filter(i => ((i.parcela_atual || 1) + increment) <= (i.total_parcelas || 1))
+          .filter(i => {
+            const key = `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`;
+            return !existingKeys.has(key);
+          })
           .map(i => ({
             mes_id: targetMonthId,
             descricao: i.descricao,
             valor_parcela: i.valor_parcela,
-            parcela_atual: (i.parcela_atual || 0) + increment,
+            parcela_atual: (i.parcela_atual || 1) + increment,
             total_parcelas: i.total_parcelas
           }));
 
