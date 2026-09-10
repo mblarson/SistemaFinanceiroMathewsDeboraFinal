@@ -11,7 +11,8 @@ const DEFAULT_BANCOS = [
   { id: 1, nome: "American Express", cor: "#0070CD" },
   { id: 2, nome: "BB", cor: "#FCFD04" },
   { id: 3, nome: "Nubank", cor: "#820AD1" },
-  { id: 6, nome: "Itaú", cor: "#EC7000" }
+  { id: 6, nome: "Itaú", cor: "#EC7000" },
+  { id: 10, nome: "C6 Bank", cor: "#000000" }
 ];
 
 const DEFAULT_MESES = [
@@ -92,7 +93,24 @@ const getLocalDB = (): Record<string, any[]> => {
   const dbStr = localStorage.getItem('supabase_fallback_db');
   if (dbStr) {
     try {
-      return JSON.parse(dbStr);
+      const parsed = JSON.parse(dbStr);
+      if (Array.isArray(parsed.bancos)) {
+        let updated = false;
+        DEFAULT_BANCOS.forEach(defBank => {
+          const exists = parsed.bancos.some((b: any) => 
+            (b.id === defBank.id) || 
+            (b.nome && b.nome.toLowerCase() === defBank.nome.toLowerCase())
+          );
+          if (!exists) {
+            parsed.bancos.push(defBank);
+            updated = true;
+          }
+        });
+        if (updated) {
+          saveLocalDB(parsed);
+        }
+      }
+      return parsed;
     } catch (e) {
       console.error("Erro parsing fallback Local Storage DB:", e);
     }
@@ -141,10 +159,28 @@ interface ChainStep {
 
 // Salva dados obtidos com sucesso do servidor para manter dados sempre atualizados
 const updateOfflineCache = (tableName: string, steps: ChainStep[], data: any) => {
-  const hasFilters = steps.some(s => s.method === 'eq' || s.method === 'in');
-  if (!hasFilters && Array.isArray(data)) {
+  if (Array.isArray(data)) {
     const db = getLocalDB();
-    db[tableName] = data;
+    if (!db[tableName]) db[tableName] = [];
+    const currentTable = db[tableName];
+    const dataMap = new Map(data.map((item: any) => [item.id, item]));
+    const updatedTable = currentTable.map((item: any) => dataMap.has(item.id) ? { ...item, ...dataMap.get(item.id) } : item);
+    data.forEach((item: any) => {
+      if (!updatedTable.some((u: any) => u.id === item.id)) {
+        updatedTable.push(item);
+      }
+    });
+    db[tableName] = updatedTable;
+    saveLocalDB(db);
+  } else if (data && typeof data === 'object' && data.id) {
+    const db = getLocalDB();
+    if (!db[tableName]) db[tableName] = [];
+    const idx = db[tableName].findIndex((item: any) => item.id === data.id);
+    if (idx >= 0) {
+      db[tableName][idx] = { ...db[tableName][idx], ...data };
+    } else {
+      db[tableName].push(data);
+    }
     saveLocalDB(db);
   }
 };

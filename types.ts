@@ -69,5 +69,6 @@ export interface Installment {
   valor_parcela: number;
   parcela_atual: number;
   total_parcelas: number;
+  banco_id?: number | null;
   criado_em?: string;
 }

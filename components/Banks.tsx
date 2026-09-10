@@ -439,6 +439,31 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
             <h2 className="text-2xl font-black text-gray-900 mb-8">Nova Instituição</h2>
             <form onSubmit={handleCreateBank} className="space-y-6">
               <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Bancos Sugeridos</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { nome: 'C6 Bank', cor: '#000000' },
+                    { nome: 'Nubank', cor: '#820AD1' },
+                    { nome: 'Itaú', cor: '#EC7000' },
+                    { nome: 'BB', cor: '#FFFF00' },
+                    { nome: 'American Express', cor: '#001E62' },
+                    { nome: 'Bradesco', cor: '#CC092F' },
+                    { nome: 'Santander', cor: '#EC0000' },
+                    { nome: 'Inter', cor: '#FF7A00' }
+                  ].map(preset => (
+                    <button
+                      key={preset.nome}
+                      type="button"
+                      onClick={() => setBankForm({ nome: preset.nome, cor: preset.cor })}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all active:scale-95 bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full border border-black/10" style={{ backgroundColor: preset.cor }}></span>
+                      {preset.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Nome Comercial</label>
                 <input type="text" placeholder="Ex: Nubank, Itaú..." className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-5 outline-none focus:border-green-700 font-bold" value={bankForm.nome} onChange={e => setBankForm({...bankForm, nome: e.target.value})} required />
               </div>

@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw, CreditCard, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
-import { Month, Installment } from '../types';
+import { Month, Installment, Bank } from '../types';
 
 interface InstallmentsProps {
   currentMonth: Month;
@@ -11,13 +11,24 @@ interface InstallmentsProps {
 
 const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd }) => {
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showBankSummaryModal, setShowBankSummaryModal] = useState(false);
+  const [showProjectConfirmModal, setShowProjectConfirmModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', atual: '1', total: '1' });
+  const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', atual: '1', total: '1', banco_id: '' });
   const [projecting, setProjecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(prev => (prev?.message === message ? null : prev));
+    }, 4000);
+  };
 
   useEffect(() => {
     fetchData();
@@ -26,7 +37,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   useEffect(() => {
     if (triggerAdd > 0) {
       setEditingId(null);
-      setFormData({ desc: '', val: 'R$ 0,00', atual: '1', total: '1' });
+      setFormData({ desc: '', val: 'R$ 0,00', atual: '1', total: '1', banco_id: '' });
       setShowModal(true);
     }
   }, [triggerAdd]);
@@ -46,7 +57,8 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       desc: item.descricao || '',
       val: maskCurrency(((item.valor_parcela || 0) * 100).toString()),
       atual: (item.parcela_atual ?? 1).toString(),
-      total: (item.total_parcelas ?? 1).toString()
+      total: (item.total_parcelas ?? 1).toString(),
+      banco_id: item.banco_id ? String(item.banco_id) : ''
     });
     setShowModal(true);
   };
@@ -58,25 +70,54 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     
     setSubmitting(true);
     try {
-      const payload = {
+      const parsedBancoId = formData.banco_id && formData.banco_id !== ''
+        ? parseInt(formData.banco_id, 10)
+        : null;
+
+      const payload: any = {
         mes_id: currentMonth.id,
         descricao: formData.desc,
         valor_parcela: val,
         parcela_atual: parseInt(formData.atual, 10),
-        total_parcelas: parseInt(formData.total, 10)
+        total_parcelas: parseInt(formData.total, 10),
+        banco_id: parsedBancoId
       };
 
       if (editingId) {
-        await supabaseClient.from('parcelamentos').update(payload).eq('id', editingId);
+        // Atualização otimista imediata mantendo a posição e ordenação
+        setInstallments(prev => prev.map(item => item.id === editingId ? { ...item, ...payload } : item));
+
+        const { error } = await supabaseClient
+          .from('parcelamentos')
+          .update(payload)
+          .eq('id', editingId)
+          .select();
+
+        if (error) {
+          throw error;
+        }
+
+        showToast("Parcelamento atualizado com sucesso!", "success");
       } else {
-        await supabaseClient.from('parcelamentos').insert([payload]);
+        const { error } = await supabaseClient
+          .from('parcelamentos')
+          .insert([payload])
+          .select();
+
+        if (error) {
+          throw error;
+        }
+
+        showToast("Parcelamento criado com sucesso!", "success");
       }
       
       setShowModal(false);
       setEditingId(null);
-      fetchData();
+      await fetchData();
     } catch (err: any) {
-      alert("Erro ao salvar parcelamento: " + err.message);
+      console.error("Erro ao salvar parcelamento:", err);
+      showToast("Erro ao salvar parcelamento: " + (err.message || "Tente novamente"), "error");
+      await fetchData();
     } finally {
       setSubmitting(false);
     }
@@ -184,7 +225,8 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         descricao: p.descricao,
         valor_parcela: p.valor_parcela,
         parcela_atual: (p.parcela_atual ?? 1) + diffMonths,
-        total_parcelas: p.total_parcelas
+        total_parcelas: p.total_parcelas,
+        banco_id: p.banco_id ?? null
       }));
 
     if (toInsert.length > 0) {
@@ -203,6 +245,15 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Carrega bancos cadastrados para associação visual
+      const { data: bData } = await supabaseClient
+        .from('bancos')
+        .select('*')
+        .order('nome');
+      if (bData) {
+        setBanks(bData);
+      }
+
       const { data } = await supabaseClient
         .from('parcelamentos')
         .select('*')
@@ -273,7 +324,8 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         descricao: i.descricao,
         valor_parcela: i.valor_parcela,
         parcela_atual: (i.parcela_atual ?? 1) + increment,
-        total_parcelas: i.total_parcelas
+        total_parcelas: i.total_parcelas,
+        banco_id: i.banco_id ?? null
       }));
 
     if (toInsert.length > 0) {
@@ -285,7 +337,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   };
 
-  const projectFutureInstallments = async () => {
+  const handleStartProjection = async () => {
     let baseInstallments = installments;
 
     // Se o mês atual não tiver parcelas carregadas, busca a base do mês anterior ativo
@@ -303,11 +355,33 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
 
     if (baseInstallments.length === 0) {
-      alert("Não há parcelamentos ativos no sistema para projetar.");
+      showToast("Não há parcelamentos ativos no sistema para projetar.", "info");
       return;
     }
 
-    if (!confirm(`Deseja projetar estes parcelamentos para os próximos 2 meses a partir de ${currentMonth.nome}/${currentMonth.ano}?`)) return;
+    setShowProjectConfirmModal(true);
+  };
+
+  const executeProjection = async () => {
+    setShowProjectConfirmModal(false);
+    let baseInstallments = installments;
+
+    if (baseInstallments.length === 0) {
+      const precInfo = await fetchPrecedingMonthInstallments(currentMonth);
+      if (precInfo && precInfo.installments.length > 0) {
+        baseInstallments = precInfo.installments
+          .filter(p => ((p.parcela_atual ?? 1) + precInfo.diffMonths) <= (p.total_parcelas ?? 1))
+          .map(p => ({
+            ...p,
+            parcela_atual: (p.parcela_atual ?? 1) + precInfo.diffMonths
+          }));
+      }
+    }
+
+    if (baseInstallments.length === 0) {
+      showToast("Não há parcelamentos ativos no sistema para projetar.", "info");
+      return;
+    }
 
     setProjecting(true);
     try {
@@ -328,7 +402,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       const nextMonth2 = await getOrCreateMonth(nextMonthName2, nextYear2);
 
       if (!nextMonth1) {
-        alert(`Erro: Não foi possível localizar ou criar o mês de destino (${nextMonthName1}/${nextYear1}).`);
+        showToast(`Erro: Não foi possível localizar ou criar o mês de destino (${nextMonthName1}/${nextYear1}).`, "error");
         return;
       }
 
@@ -337,11 +411,11 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         await projectForMonth(nextMonth2.id, baseInstallments, 2);
       }
 
-      alert(`Projeção concluída com sucesso para os meses futuros (${nextMonthName1}/${nextYear1}` + (nextMonth2 ? ` e ${nextMonthName2}/${nextYear2}` : '') + `)!`);
+      showToast(`Projeção concluída para os meses futuros (${nextMonthName1}/${nextYear1}` + (nextMonth2 ? ` e ${nextMonthName2}/${nextYear2}` : '') + `)!`, "success");
       await fetchData();
     } catch (err: any) {
       console.error("Erro na projeção manual:", err);
-      alert("Ocorreu um erro ao projetar as parcelas: " + (err.message || err));
+      showToast("Ocorreu um erro ao projetar as parcelas: " + (err.message || err), "error");
     } finally {
       setProjecting(false);
     }
@@ -351,6 +425,36 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const totalUltimaParcelaMes = installments
     .filter(item => (item.parcela_atual ?? 1) === (item.total_parcelas ?? 1))
     .reduce((acc, item) => acc + (item.valor_parcela ?? 0), 0);
+
+  // Agrupamento exclusivo de parcelas por banco (Isolamento contábil total)
+  // Filtro estrito: lista APENAS bancos que possuem pelo menos uma parcela ativa no mês
+  const bankSummary = useMemo(() => {
+    const summaryMap: { [key: string]: { bank: Bank; count: number; total: number; items: Installment[] } } = {};
+
+    installments.forEach(item => {
+      // Ignora parcelamentos sem banco vinculado
+      if (!item.banco_id) return;
+
+      const bank = banks.find(b => Number(b.id) === Number(item.banco_id));
+      if (!bank) return;
+
+      const key = String(bank.id);
+      if (!summaryMap[key]) {
+        summaryMap[key] = { bank, count: 0, total: 0, items: [] };
+      }
+      summaryMap[key].count += 1;
+      summaryMap[key].total += item.valor_parcela ?? 0;
+      summaryMap[key].items.push(item);
+    });
+
+    const list = Object.values(summaryMap).filter(g => g.count > 0 && g.total > 0);
+    list.sort((a, b) => b.total - a.total);
+    return list;
+  }, [banks, installments]);
+
+  const totalParcelasBancos = useMemo(() => {
+    return bankSummary.reduce((acc, g) => acc + g.total, 0);
+  }, [bankSummary]);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
@@ -388,23 +492,31 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               </div>
             </div>
 
-            {/* Botão de Projetar */}
-            {canEdit ? (
-              <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center">
+            {/* Ações: Projetar e Parcelas por Banco */}
+            <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center gap-2">
+              {canEdit ? (
                 <button 
-                  onClick={projectFutureInstallments}
+                  onClick={handleStartProjection}
                   disabled={projecting}
-                  className="w-full h-full min-h-[48px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
+                  className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
                 >
                   <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
                   {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
                 </button>
-              </div>
-            ) : (
-              <div className="bg-gray-50/50 p-5 rounded-3xl border border-dashed border-gray-200 flex items-center justify-center">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mês Fechado para Edição</p>
-              </div>
-            )}
+              ) : (
+                <div className="w-full py-2 flex items-center justify-center">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mês Fechado para Edição</p>
+                </div>
+              )}
+
+              <button 
+                onClick={() => setShowBankSummaryModal(true)}
+                className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-emerald-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-800 active:scale-95 transition-all shadow-md cursor-pointer shrink-0"
+              >
+                <CreditCard size={14} />
+                Parcelas por Banco
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -427,15 +539,22 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               const totalQuitacao = pValor * restantes;
 
               const isLast = pAtual === pTotal;
+              const bank = item.banco_id != null ? banks.find(b => Number(b.id) === Number(item.banco_id)) : null;
+              const bankColor = bank?.cor;
 
               return (
                 <div 
                   key={item.id} 
-                  className={`bg-white rounded-3xl p-5 border flex flex-col transition-all relative ${
+                  className={`bg-white rounded-3xl p-5 flex flex-col transition-all relative ${
                     isLast 
-                      ? 'border-blue-500 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
-                      : 'border-gray-100 shadow-sm'
+                      ? 'ring-2 ring-blue-500 ring-offset-2 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.18)]' 
+                      : 'shadow-sm'
                   }`}
+                  style={{ 
+                    borderWidth: '2px', 
+                    borderStyle: 'solid', 
+                    borderColor: bankColor ? bankColor : (isLast ? '#3b82f6' : '#e5e7eb') 
+                  }}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3 min-w-0">
@@ -443,11 +562,24 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                         <CalendarClock size={18} />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
                           <h4 className="font-black text-gray-800 text-sm truncate max-w-[120px]" title={item.descricao}>{item.descricao}</h4>
                           {isLast && (
                             <span className="bg-blue-600 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm animate-pulse-subtle">
                               ÚLTIMA
+                            </span>
+                          )}
+                          {bank && (
+                            <span 
+                              className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border shadow-xs flex items-center gap-1 shrink-0"
+                              style={{ 
+                                backgroundColor: bank.cor === '#000000' ? '#000000' : `${bank.cor}18`, 
+                                borderColor: bank.cor === '#000000' ? '#000000' : bank.cor,
+                                color: bank.cor === '#000000' ? '#ffffff' : (bank.cor === '#FFFF00' || bank.cor === '#FCFD04' ? '#854d0e' : bank.cor)
+                              }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: bank.cor === '#000000' ? '#ffffff' : bank.cor }}></span>
+                              {bank.nome}
                             </span>
                           )}
                         </div>
@@ -492,18 +624,36 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       </>
       )}
 
+      {/* Modal de Cadastro / Edição com Seleção de Banco */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-2xl animate-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">{editingId ? 'Editar' : 'Novo'} Parcelamento</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400"><LucideX size={20} /></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><LucideX size={20} /></button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Descrição</label>
                 <input type="text" value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-sm" placeholder="Notebook..." required />
               </div>
+
+              <div>
+                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Banco (Cartão de Origem)</label>
+                <select 
+                  value={formData.banco_id} 
+                  onChange={e => setFormData({ ...formData, banco_id: e.target.value })}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-green-700 font-bold text-sm text-gray-800 cursor-pointer"
+                >
+                  <option value="">Sem Banco Vinculado</option>
+                  {banks.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-1">
                   <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">Valor</label>
@@ -530,6 +680,145 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal PARCELAS POR BANCO (Exclusivo do Módulo de Parcelas) */}
+      {showBankSummaryModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-lg p-6 sm:p-8 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl animate-in fade-in slide-in-from-bottom sm:zoom-in duration-300 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <CreditCard size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Parcelas por Banco</h2>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{currentMonth.nome} / {currentMonth.ano}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowBankSummaryModal(false)} 
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+              >
+                <LucideX size={18} />
+              </button>
+            </div>
+
+            {/* Totalizador Geral Vinculado aos Bancos */}
+            <div className="my-4 p-4 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total das Parcelas por Banco</p>
+                <p className="text-xl font-black text-gray-900 tracking-tight">{formatCurrency(totalParcelasBancos)}</p>
+              </div>
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full uppercase tracking-wider">
+                {bankSummary.length} {bankSummary.length === 1 ? 'banco ativo' : 'bancos ativos'}
+              </span>
+            </div>
+
+            {/* Lista Simplificada dos Bancos e Totais Consolidados */}
+            <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 py-1">
+              {bankSummary.length === 0 ? (
+                <div className="py-12 text-center text-gray-400">
+                  <CreditCard size={36} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-xs font-bold uppercase tracking-widest">Nenhum parcelamento vinculado a bancos neste mês</p>
+                </div>
+              ) : (
+                bankSummary.map((group) => {
+                  const bColor = group.bank.cor || '#64748b';
+                  const bName = group.bank.nome;
+
+                  return (
+                    <div 
+                      key={group.bank.id}
+                      className="p-3.5 rounded-2xl border border-gray-100 bg-white shadow-xs transition-all hover:border-gray-300 flex items-center justify-between"
+                      style={{ borderLeftWidth: '6px', borderLeftColor: bColor }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span 
+                          className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10 shadow-xs" 
+                          style={{ backgroundColor: bColor }}
+                        />
+                        <h4 className="font-black text-sm text-gray-900 tracking-tight">{bName}</h4>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(group.total)}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Rodapé com isolamento e botão de fechar */}
+            <div className="pt-4 border-t border-gray-100 mt-2 space-y-3">
+              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider text-center">
+                Totalizador exclusivo do módulo de parcelas. Não afeta o saldo contábil ou outras telas.
+              </p>
+              <button 
+                type="button" 
+                onClick={() => setShowBankSummaryModal(false)} 
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white font-black py-3.5 rounded-2xl uppercase text-[10px] tracking-widest shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Projeção (Sem alert/confirm nativo) */}
+      {showProjectConfirmModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+              <RefreshCw size={24} />
+            </div>
+            <h3 className="text-base font-black text-gray-900 tracking-tight mb-2 uppercase">Projetar Meses Futuros</h3>
+            <p className="text-xs text-gray-600 leading-relaxed mb-6">
+              Deseja projetar os parcelamentos ativos para os próximos 2 meses a partir de <strong>{currentMonth.nome}/{currentMonth.ano}</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowProjectConfirmModal(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl uppercase text-[10px] tracking-widest transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeProjection}
+                disabled={projecting}
+                className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest transition-colors shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {projecting ? 'Projetando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notificações do Sistema (Sem alert nativo) */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[200] max-w-sm px-5 py-3.5 rounded-2xl shadow-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200 ${
+          toast.type === 'error' 
+            ? 'bg-red-900 text-white border-red-700' 
+            : toast.type === 'success'
+              ? 'bg-emerald-900 text-white border-emerald-700'
+              : 'bg-gray-900 text-white border-gray-700'
+        }`}>
+          {toast.type === 'error' ? (
+            <AlertCircle size={18} className="text-red-400 shrink-0" />
+          ) : toast.type === 'success' ? (
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          ) : (
+            <Info size={18} className="text-blue-400 shrink-0" />
+          )}
+          <p className="text-xs font-bold leading-snug">{toast.message}</p>
+          <button onClick={() => setToast(null)} className="ml-auto text-white/60 hover:text-white p-1 cursor-pointer">
+            <LucideX size={15} />
+          </button>
         </div>
       )}
     </div>

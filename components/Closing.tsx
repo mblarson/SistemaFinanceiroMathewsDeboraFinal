@@ -160,7 +160,8 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
             descricao: i.descricao,
             valor_parcela: i.valor_parcela,
             parcela_atual: (i.parcela_atual || 1) + increment,
-            total_parcelas: i.total_parcelas
+            total_parcelas: i.total_parcelas,
+            banco_id: i.banco_id ?? null
           }));
 
         if (toInsert.length > 0) {
