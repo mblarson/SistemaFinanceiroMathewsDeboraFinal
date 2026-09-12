@@ -7,7 +7,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const rawSupabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Default seed/starter data for resilient offline storage
-const DEFAULT_BANCOS = [
+export const DEFAULT_BANCOS = [
   { id: 1, nome: "American Express", cor: "#0070CD" },
   { id: 2, nome: "BB", cor: "#FCFD04" },
   { id: 3, nome: "Nubank", cor: "#820AD1" },

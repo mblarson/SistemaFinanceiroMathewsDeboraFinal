@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw, CreditCard, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { supabaseClient } from '../services/supabase';
+import { supabaseClient, DEFAULT_BANCOS } from '../services/supabase';
 import { Month, Installment, Bank } from '../types';
 
 interface InstallmentsProps {
@@ -9,9 +9,134 @@ interface InstallmentsProps {
   triggerAdd: number;
 }
 
+// Configuração visual explícita para evitar problemas de purge do Tailwind CSS
+// e garantir contraste e fidelidade de cor para todos os bancos cadastrados
+export const getBankVisualConfig = (bank: Bank | null | undefined) => {
+  if (!bank) {
+    return {
+      borderColor: '#e5e7eb',
+      borderClass: 'border-gray-200',
+      badgeBg: '#f3f4f6',
+      badgeText: '#4b5563',
+      badgeBorder: '#d1d5db',
+      dotColor: '#9ca3af'
+    };
+  }
+
+  const nome = (bank.nome || '').trim().toLowerCase();
+  const rawColor = (bank.cor || '').trim().toLowerCase();
+
+  // C6 Bank: Borda preta absoluta com alto impacto visual
+  if (nome.includes('c6') || rawColor === '#000000' || rawColor === '#000') {
+    return {
+      borderColor: '#000000',
+      borderClass: 'border-black',
+      badgeBg: '#000000',
+      badgeText: '#ffffff',
+      badgeBorder: '#000000',
+      dotColor: '#ffffff'
+    };
+  }
+
+  // Banco do Brasil (BB): Amarelo ouro calibrado para contraste em fundo branco
+  if (nome.includes('bb') || nome.includes('brasil') || rawColor === '#ffff00' || rawColor === '#fcfd04') {
+    return {
+      borderColor: '#EAB308',
+      borderClass: 'border-yellow-500',
+      badgeBg: '#FEF08A',
+      badgeText: '#713F12',
+      badgeBorder: '#FACC15',
+      dotColor: '#854D0E'
+    };
+  }
+
+  // Nubank: Roxo icônico da marca
+  if (nome.includes('nu') || rawColor === '#820ad1') {
+    return {
+      borderColor: '#820AD1',
+      borderClass: 'border-purple-600',
+      badgeBg: '#F3E8FF',
+      badgeText: '#581C87',
+      badgeBorder: '#C084FC',
+      dotColor: '#820AD1'
+    };
+  }
+
+  // Itaú: Laranja vibrante característico
+  if (nome.includes('ita') || rawColor === '#ec7000') {
+    return {
+      borderColor: '#EC7000',
+      borderClass: 'border-orange-500',
+      badgeBg: '#FFEDD5',
+      badgeText: '#7C2D12',
+      badgeBorder: '#FB923C',
+      dotColor: '#EC7000'
+    };
+  }
+
+  // American Express (Amex): Azul nobre marinho
+  if (nome.includes('express') || nome.includes('amex') || rawColor === '#001e62' || rawColor === '#0070cd') {
+    return {
+      borderColor: '#001E62',
+      borderClass: 'border-blue-900',
+      badgeBg: '#EFF6FF',
+      badgeText: '#1E3A8A',
+      badgeBorder: '#60A5FA',
+      dotColor: '#001E62'
+    };
+  }
+
+  // Bradesco
+  if (nome.includes('bradesco') || rawColor === '#cc092f') {
+    return {
+      borderColor: '#CC092F',
+      borderClass: 'border-red-600',
+      badgeBg: '#FEE2E2',
+      badgeText: '#7F1D1D',
+      badgeBorder: '#F87171',
+      dotColor: '#CC092F'
+    };
+  }
+
+  // Santander
+  if (nome.includes('santander') || rawColor === '#ec0000') {
+    return {
+      borderColor: '#EC0000',
+      borderClass: 'border-red-600',
+      badgeBg: '#FEE2E2',
+      badgeText: '#7F1D1D',
+      badgeBorder: '#F87171',
+      dotColor: '#EC0000'
+    };
+  }
+
+  // Inter
+  if (nome.includes('inter') || rawColor === '#ff7a00') {
+    return {
+      borderColor: '#FF7A00',
+      borderClass: 'border-orange-500',
+      badgeBg: '#FFEDD5',
+      badgeText: '#7C2D12',
+      badgeBorder: '#FB923C',
+      dotColor: '#FF7A00'
+    };
+  }
+
+  // Fallback para qualquer outro banco cadastrado
+  const customColor = bank.cor || '#4b5563';
+  return {
+    borderColor: customColor,
+    borderClass: '',
+    badgeBg: '#f3f4f6',
+    badgeText: '#1f2937',
+    badgeBorder: customColor,
+    dotColor: customColor
+  };
+};
+
 const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd }) => {
   const [installments, setInstallments] = useState<Installment[]>([]);
-  const [banks, setBanks] = useState<Bank[]>([]);
+  const [banks, setBanks] = useState<Bank[]>(DEFAULT_BANCOS);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBankSummaryModal, setShowBankSummaryModal] = useState(false);
@@ -42,23 +167,50 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   }, [triggerAdd]);
 
+  // Sanitização rigorosa para ponto flutuante monetário (exatamente 2 casas decimais)
+  const sanitizeMoney = (val: number | null | undefined): number => {
+    if (val == null || isNaN(val) || !isFinite(val)) return 0;
+    return Math.round(Number(val) * 100) / 100;
+  };
+
   const maskCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const amount = Number(digits) / 100;
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
+    return new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   };
 
-  const parseCurrency = (value: string) => parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  const parseCurrency = (value: string): number => {
+    const clean = value.replace(/[^\d,]/g, '').replace(',', '.');
+    const num = parseFloat(clean) || 0;
+    return sanitizeMoney(num);
+  };
+
+  const formatCurrency = (val: number | null | undefined): string => {
+    const safeVal = sanitizeMoney(val);
+    return new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeVal);
+  };
 
   const openEditModal = (item: Installment) => {
     setEditingId(item.id);
+    const sanitizedVal = sanitizeMoney(item.valor_parcela);
+    // Multiplica por 100 e arredonda para evitar dízima/ponto flutuante na conversão para centavos
+    const cents = Math.round(sanitizedVal * 100);
     setFormData({
       desc: item.descricao || '',
-      val: maskCurrency(((item.valor_parcela || 0) * 100).toString()),
+      val: maskCurrency(cents.toString()),
       atual: (item.parcela_atual ?? 1).toString(),
       total: (item.total_parcelas ?? 1).toString(),
-      banco_id: item.banco_id ? String(item.banco_id) : ''
+      banco_id: item.banco_id != null ? String(item.banco_id) : ''
     });
     setShowModal(true);
   };
@@ -70,13 +222,13 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     
     setSubmitting(true);
     try {
-      const parsedBancoId = formData.banco_id && formData.banco_id !== ''
+      const parsedBancoId = formData.banco_id && formData.banco_id.trim() !== ''
         ? parseInt(formData.banco_id, 10)
         : null;
 
       const payload: any = {
         mes_id: currentMonth.id,
-        descricao: formData.desc,
+        descricao: formData.desc.trim(),
         valor_parcela: val,
         parcela_atual: parseInt(formData.atual, 10),
         total_parcelas: parseInt(formData.total, 10),
@@ -84,9 +236,10 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
       };
 
       if (editingId) {
-        // Atualização otimista imediata mantendo a posição e ordenação
+        // Atualização otimista imediata mantendo a exata mesma posição e ordenação visual
         setInstallments(prev => prev.map(item => item.id === editingId ? { ...item, ...payload } : item));
 
+        // Persistência segura no Supabase
         const { error } = await supabaseClient
           .from('parcelamentos')
           .update(payload)
@@ -97,9 +250,26 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
           throw error;
         }
 
+        // Propaga o banco_id para outras parcelas da mesma série de compra
+        // para garantir consistência ao alternar meses
+        if (payload.descricao && payload.total_parcelas) {
+          try {
+            await supabaseClient
+              .from('parcelamentos')
+              .update({ banco_id: parsedBancoId })
+              .eq('descricao', payload.descricao)
+              .eq('total_parcelas', payload.total_parcelas)
+              .neq('id', editingId);
+          } catch (propErr) {
+            console.warn("Aviso ao propagar banco para parcelas da mesma série:", propErr);
+          }
+        }
+
+        setShowModal(false);
+        setEditingId(null);
         showToast("Parcelamento atualizado com sucesso!", "success");
       } else {
-        const { error } = await supabaseClient
+        const { data: created, error } = await supabaseClient
           .from('parcelamentos')
           .insert([payload])
           .select();
@@ -108,12 +278,11 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
           throw error;
         }
 
+        setShowModal(false);
+        setEditingId(null);
         showToast("Parcelamento criado com sucesso!", "success");
+        await fetchData();
       }
-      
-      setShowModal(false);
-      setEditingId(null);
-      await fetchData();
     } catch (err: any) {
       console.error("Erro ao salvar parcelamento:", err);
       showToast("Erro ao salvar parcelamento: " + (err.message || "Tente novamente"), "error");
@@ -306,18 +475,39 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     // Busca registros existentes no mês de destino para evitar duplicidades
     const { data: existingInTarget } = await supabaseClient
       .from('parcelamentos')
-      .select('descricao, valor_parcela, total_parcelas')
+      .select('id, descricao, valor_parcela, total_parcelas, banco_id')
       .eq('mes_id', targetMonthId);
     
-    const existingKeys = new Set(
-      (existingInTarget || []).map(i => `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`)
+    const existingMap = new Map(
+      (existingInTarget || []).map(i => [
+        `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`,
+        i
+      ])
     );
+
+    // Se o registro já existia no destino mas estava sem banco_id, sincroniza com o banco da origem
+    for (const source of sourceInstallments) {
+      if (source.banco_id != null) {
+        const key = `${(source.descricao || '').trim().toLowerCase()}_${source.valor_parcela}_${source.total_parcelas}`;
+        const existing = existingMap.get(key);
+        if (existing && existing.banco_id == null) {
+          try {
+            await supabaseClient
+              .from('parcelamentos')
+              .update({ banco_id: source.banco_id })
+              .eq('id', existing.id);
+          } catch (e) {
+            console.warn("Aviso ao sincronizar banco com registro existente:", e);
+          }
+        }
+      }
+    }
 
     const toInsert = sourceInstallments
       .filter(i => ((i.parcela_atual ?? 1) + increment) <= (i.total_parcelas ?? 1))
       .filter(i => {
         const key = `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`;
-        return !existingKeys.has(key);
+        return !existingMap.has(key);
       })
       .map(i => ({
         mes_id: targetMonthId,
@@ -540,20 +730,20 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
               const isLast = pAtual === pTotal;
               const bank = item.banco_id != null ? banks.find(b => Number(b.id) === Number(item.banco_id)) : null;
-              const bankColor = bank?.cor;
+              const bankVisual = getBankVisualConfig(bank);
 
               return (
                 <div 
                   key={item.id} 
                   className={`bg-white rounded-3xl p-5 flex flex-col transition-all relative ${
                     isLast 
-                      ? 'ring-2 ring-blue-500 ring-offset-2 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.18)]' 
+                      ? 'ring-2 ring-blue-500 ring-offset-2 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.22)]' 
                       : 'shadow-sm'
                   }`}
                   style={{ 
-                    borderWidth: '2px', 
+                    borderWidth: '2.5px', 
                     borderStyle: 'solid', 
-                    borderColor: bankColor ? bankColor : (isLast ? '#3b82f6' : '#e5e7eb') 
+                    borderColor: bank ? bankVisual.borderColor : (isLast ? '#3b82f6' : '#e5e7eb') 
                   }}
                 >
                   <div className="flex justify-between items-start mb-4">
@@ -565,20 +755,23 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
                           <h4 className="font-black text-gray-800 text-sm truncate max-w-[120px]" title={item.descricao}>{item.descricao}</h4>
                           {isLast && (
-                            <span className="bg-blue-600 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm animate-pulse-subtle">
+                            <span className="bg-blue-600 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border border-blue-400 shadow-sm animate-pulse-subtle shrink-0">
                               ÚLTIMA
                             </span>
                           )}
                           {bank && (
                             <span 
-                              className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider border shadow-xs flex items-center gap-1 shrink-0"
+                              className="text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider border shadow-xs flex items-center gap-1.5 shrink-0"
                               style={{ 
-                                backgroundColor: bank.cor === '#000000' ? '#000000' : `${bank.cor}18`, 
-                                borderColor: bank.cor === '#000000' ? '#000000' : bank.cor,
-                                color: bank.cor === '#000000' ? '#ffffff' : (bank.cor === '#FFFF00' || bank.cor === '#FCFD04' ? '#854d0e' : bank.cor)
+                                backgroundColor: bankVisual.badgeBg, 
+                                borderColor: bankVisual.badgeBorder,
+                                color: bankVisual.badgeText
                               }}
                             >
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: bank.cor === '#000000' ? '#ffffff' : bank.cor }}></span>
+                              <span 
+                                className="w-1.5 h-1.5 rounded-full shrink-0 border border-black/10" 
+                                style={{ backgroundColor: bankVisual.dotColor }}
+                              />
                               {bank.nome}
                             </span>
                           )}
@@ -725,19 +918,19 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                 </div>
               ) : (
                 bankSummary.map((group) => {
-                  const bColor = group.bank.cor || '#64748b';
+                  const bVisual = getBankVisualConfig(group.bank);
                   const bName = group.bank.nome;
 
                   return (
                     <div 
                       key={group.bank.id}
                       className="p-3.5 rounded-2xl border border-gray-100 bg-white shadow-xs transition-all hover:border-gray-300 flex items-center justify-between"
-                      style={{ borderLeftWidth: '6px', borderLeftColor: bColor }}
+                      style={{ borderLeftWidth: '6px', borderLeftColor: bVisual.borderColor }}
                     >
                       <div className="flex items-center gap-3">
                         <span 
                           className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10 shadow-xs" 
-                          style={{ backgroundColor: bColor }}
+                          style={{ backgroundColor: bVisual.borderColor }}
                         />
                         <h4 className="font-black text-sm text-gray-900 tracking-tight">{bName}</h4>
                       </div>

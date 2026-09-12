@@ -142,18 +142,39 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
         // Busca o que já existe no destino para evitar duplicidades usando chave composta
         const { data: existingInTarget } = await supabaseClient
           .from('parcelamentos')
-          .select('descricao, valor_parcela, total_parcelas')
+          .select('id, descricao, valor_parcela, total_parcelas, banco_id')
           .eq('mes_id', targetMonthId);
         
-        const existingKeys = new Set(
-          (existingInTarget || []).map(i => `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`)
+        const existingMap = new Map(
+          (existingInTarget || []).map(i => [
+            `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`,
+            i
+          ])
         );
+
+        // Atualiza banco_id de parcelas já existentes no destino se a origem tiver banco
+        for (const inst of installments) {
+          if (inst.banco_id != null) {
+            const key = `${(inst.descricao || '').trim().toLowerCase()}_${inst.valor_parcela}_${inst.total_parcelas}`;
+            const existing = existingMap.get(key);
+            if (existing && existing.banco_id == null) {
+              try {
+                await supabaseClient
+                  .from('parcelamentos')
+                  .update({ banco_id: inst.banco_id })
+                  .eq('id', existing.id);
+              } catch (e) {
+                console.warn("Aviso ao atualizar banco no mês destino:", e);
+              }
+            }
+          }
+        }
 
         const toInsert = installments
           .filter(i => ((i.parcela_atual || 1) + increment) <= (i.total_parcelas || 1))
           .filter(i => {
             const key = `${(i.descricao || '').trim().toLowerCase()}_${i.valor_parcela}_${i.total_parcelas}`;
-            return !existingKeys.has(key);
+            return !existingMap.has(key);
           })
           .map(i => ({
             mes_id: targetMonthId,
@@ -178,7 +199,6 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
       }
     }
     
-    alert(`Mês de ${currentMonth.nome} encerrado.`);
     onRefresh();
     fetchMonths();
   };
