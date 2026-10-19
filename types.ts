@@ -72,3 +72,16 @@ export interface Installment {
   banco_id?: number | null;
   criado_em?: string;
 }
+
+export type GastoCategoria = 'Restaurante' | 'Lazer' | 'Conveniência';
+
+export interface GastoItem {
+  id: number;
+  mes_id: number;
+  categoria: GastoCategoria | string;
+  valor: number;
+  descricao?: string;
+  data: string;
+  hora?: string;
+  criado_em?: string;
+}

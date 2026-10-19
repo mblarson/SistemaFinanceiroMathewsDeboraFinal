@@ -13,7 +13,8 @@ import {
   Plus,
   Clock,
   CalendarDays,
-  Calculator as CalcIcon
+  Calculator as CalcIcon,
+  ShoppingBag
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
@@ -23,6 +24,7 @@ import Revenue from './components/Revenue';
 import Banks from './components/Banks';
 import Closing from './components/Closing';
 import Installments from './components/Installments';
+import Spending from './components/Spending';
 import Calculator from './components/Calculator';
 import { InstallBanner } from './components/InstallBanner';
 
@@ -95,6 +97,7 @@ const App: React.FC = () => {
     revenue: 'Receitas',
     banks: 'Cartões',
     installments: 'Parcelas',
+    spending: 'Gastos',
     closing: 'Arquivo',
     calculator: 'Calculadora'
   };
@@ -323,6 +326,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
                 <NavItem icon={<Banknote size={20} />} label="Cartões" active={view === 'banks'} onClick={() => handleNavigate('banks')} />
                 <NavItem icon={<CalendarClock size={20} />} label="Parcelas" active={view === 'installments'} onClick={() => handleNavigate('installments')} />
+                <NavItem icon={<ShoppingBag size={20} />} label="Gastos" active={view === 'spending'} onClick={() => handleNavigate('spending')} />
               </div>
             </div>
             
@@ -466,6 +470,7 @@ const App: React.FC = () => {
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'installments' && <Installments key={`in-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
+          {view === 'spending' && <Spending key={`sp-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} />}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
           {view === 'calculator' && <Calculator key="calculator" />}
         </div>
