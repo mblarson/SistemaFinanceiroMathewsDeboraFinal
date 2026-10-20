@@ -5,30 +5,30 @@ const MESES_NOMES = [
   "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
 ];
 
-// Helper defensivo para inicialização do Supabase sem crash global
+// 1. Inicialização defensiva do cliente Supabase (Zero Crash)
 function getSupabaseClient() {
-  const url = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
+  const url = 
+    process.env.SUPABASE_URL || 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    'https://bnhxmjcgyqwjombhrdks.supabase.co';
+
   const key = 
     process.env.SUPABASE_SERVICE_ROLE_KEY || 
     process.env.SUPABASE_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
     process.env.SUPABASE_ANON_KEY || 
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
   if (!url || !key) {
-    return { client: null, erro: "Variáveis de ambiente do Supabase não configuradas no servidor." };
+    throw new Error("Variáveis de ambiente do Supabase não configuradas na Vercel.");
   }
 
-  try {
-    const client = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-    return { client, erro: null };
-  } catch (err: any) {
-    return { client: null, erro: `Falha ao inicializar Supabase: ${err.message || String(err)}` };
-  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
 }
 
-// Resposta JSON universal à prova de falhas para o formato Node/Vercel (req, res)
+// 2. Helper de resposta JSON universal (Express, Vercel Serverless ou Node puro)
 function sendJson(res: any, status: number, data: any) {
   const jsonStr = JSON.stringify(data);
   try {
@@ -64,11 +64,11 @@ function sendJson(res: any, status: number, data: any) {
       return res.end(jsonStr);
     }
   } catch (err) {
-    console.error("Erro crítico ao escrever resposta:", err);
+    console.error("Falha ao enviar resposta HTTP:", err);
   }
 }
 
-// Leitor resiliente do corpo da requisição (buffer, stream ou objeto pré-parseado)
+// 3. Leitor seguro e resiliente do corpo da requisição (Buffer, Stream ou Objeto)
 async function getRequestBody(req: any): Promise<any> {
   if (!req) return {};
   if (req.body) {
@@ -99,7 +99,7 @@ const normalizeCategoria = (cat: any): 'Restaurante' | 'Lazer' | 'Conveniência'
   return null;
 };
 
-// Resolução segura do mês de referência com fallback síncrono garantido
+// 4. Resolução segura do mês de referência (com fallback síncrono que nunca quebra)
 async function resolveMesReferencia(supabase: any, customMes?: string): Promise<string> {
   const now = new Date();
   const fallbackMes = `${MESES_NOMES[now.getMonth()]}/${now.getFullYear()}`;
@@ -128,25 +128,23 @@ async function resolveMesReferencia(supabase: any, customMes?: string): Promise<
       }
     }
   } catch (err) {
-    console.warn("Aviso ao buscar mês ativo no Supabase (usando fallback):", err);
+    console.warn("Aviso ao buscar mês ativo:", err);
   }
 
   return fallbackMes;
 }
 
-// --------------------------------------------------------------------------
-// HANDLER PADRÃO VERCEL SERVERLESS / PAGES ROUTER / EXPRESS
-// --------------------------------------------------------------------------
+// 5. Handler padrão exportado para o Vercel Serverless Function (@vercel/node)
 export default async function handler(req: any, res: any) {
   try {
     const method = String(req.method || 'GET').toUpperCase();
 
-    // 1. Método OPTIONS: Resposta instantânea para CORS pre-flight
+    // A. Tratamento de OPTIONS (Pre-flight do iOS Shortcuts)
     if (method === 'OPTIONS') {
       return sendJson(res, 200, { status: "ok" });
     }
 
-    // 2. Método GET: Resposta estática pura sem consultas externas para teste no navegador
+    // B. Tratamento de GET: Resposta estática imediata para teste visual no navegador
     if (method === 'GET') {
       return sendJson(res, 200, {
         status: "online",
@@ -155,7 +153,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. Bloqueio de outros métodos
+    // C. Bloqueio de outros métodos
     if (method !== 'POST') {
       return sendJson(res, 405, {
         sucesso: false,
@@ -163,7 +161,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 4. Validação de autenticação via header x-api-key
+    // D. Validação de autenticação via header x-api-key
     const headers = req.headers || {};
     const apiKey = headers['x-api-key'] || headers['X-API-KEY'] || headers['x-api-token'];
     const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
@@ -175,9 +173,16 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 5. Validação dos dados enviados
+    // E. Leitura e validação dos dados com parse seguro
     const body = await getRequestBody(req);
-    const { valor, categoria, mes_referencia: customMes } = body || {};
+    if (!body || Object.keys(body).length === 0) {
+      return sendJson(res, 400, {
+        sucesso: false,
+        erro: "Corpo da requisição inválido ou vazio."
+      });
+    }
+
+    const { valor, categoria, mes_referencia: customMes } = body;
 
     const canonicalCategoria = normalizeCategoria(categoria);
     if (!canonicalCategoria) {
@@ -209,16 +214,18 @@ export default async function handler(req: any, res: any) {
 
     const valorFinal = Number(numVal.toFixed(2));
 
-    // 6. Inicialização defensiva do cliente Supabase
-    const { client: supabase, erro: supabaseInitErro } = getSupabaseClient();
-    if (!supabase) {
+    // F. Inicialização defensiva do cliente Supabase
+    let supabase: any;
+    try {
+      supabase = getSupabaseClient();
+    } catch (supErr: any) {
       return sendJson(res, 500, {
         sucesso: false,
-        erro: supabaseInitErro || "Variáveis de ambiente do Supabase não configuradas no servidor."
+        erro: supErr.message || "Variáveis de ambiente do Supabase não configuradas na Vercel."
       });
     }
 
-    // 7. Resolução do mês de referência
+    // G. Resolução do mês de referência
     const mesReferencia = await resolveMesReferencia(supabase, customMes);
 
     const payload = {
@@ -228,7 +235,7 @@ export default async function handler(req: any, res: any) {
       created_at: new Date().toISOString()
     };
 
-    // 8. Gravação real no Supabase
+    // H. Gravação real no Supabase
     const { data, error } = await supabase
       .from('gastos_itens')
       .insert([payload])
@@ -243,141 +250,17 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // I. Sucesso confirmado
     return sendJson(res, 200, {
       sucesso: true,
       mensagem: "Gasto registrado com sucesso",
       registro: data
     });
   } catch (err: any) {
-    console.error("Exceção não tratada capturada pelo handler da API de gastos:", err);
+    console.error("Exceção geral capturada na API de gastos:", err);
     return sendJson(res, 500, {
       sucesso: false,
       erro: err.message || "Erro interno do servidor ao processar requisição."
     });
-  }
-}
-
-// --------------------------------------------------------------------------
-// EXPORTAÇÕES ADICIONAIS PARA SUPORTE NATIVO AO NEXT.JS APP ROUTER (WEB API)
-// --------------------------------------------------------------------------
-const webHeaders = {
-  'Content-Type': 'application/json; charset=utf-8',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-api-key, X-API-KEY, Authorization'
-};
-
-export async function OPTIONS() {
-  return new Response(JSON.stringify({ status: "ok" }), { status: 200, headers: webHeaders });
-}
-
-export async function GET() {
-  return new Response(
-    JSON.stringify({
-      status: "online",
-      servico: "API Gastos",
-      timestamp: new Date().toISOString()
-    }),
-    { status: 200, headers: webHeaders }
-  );
-}
-
-export async function POST(request: Request) {
-  try {
-    const apiKey = request.headers.get('x-api-key') || request.headers.get('X-API-KEY') || request.headers.get('x-api-token');
-    const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
-
-    if (!apiKey || apiKey.trim() !== configuredKey.trim()) {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: "Chave de API inválida" }),
-        { status: 401, headers: webHeaders }
-      );
-    }
-
-    let body: any;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: "Dados inválidos: corpo da requisição deve ser um JSON válido." }),
-        { status: 400, headers: webHeaders }
-      );
-    }
-
-    const { valor, categoria, mes_referencia: customMes } = body || {};
-
-    const canonicalCategoria = normalizeCategoria(categoria);
-    if (!canonicalCategoria) {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: "Dados inválidos: Categoria permitida apenas 'Restaurante', 'Lazer' ou 'Conveniência'." }),
-        { status: 400, headers: webHeaders }
-      );
-    }
-
-    let numVal: number;
-    if (typeof valor === 'number') {
-      numVal = valor;
-    } else if (typeof valor === 'string') {
-      const cleaned = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
-      numVal = parseFloat(cleaned);
-    } else {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: "Dados inválidos: Campo 'valor' obrigatório e numérico." }),
-        { status: 400, headers: webHeaders }
-      );
-    }
-
-    if (isNaN(numVal) || numVal <= 0) {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: "Dados inválidos: O campo 'valor' deve ser maior que zero." }),
-        { status: 400, headers: webHeaders }
-      );
-    }
-
-    const valorFinal = Number(numVal.toFixed(2));
-
-    const { client: supabase, erro: supabaseInitErro } = getSupabaseClient();
-    if (!supabase) {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: supabaseInitErro || "Variáveis de ambiente do Supabase não configuradas no servidor." }),
-        { status: 500, headers: webHeaders }
-      );
-    }
-
-    const mesReferencia = await resolveMesReferencia(supabase, customMes);
-
-    const payload = {
-      categoria: canonicalCategoria,
-      valor: valorFinal,
-      mes_referencia: mesReferencia,
-      created_at: new Date().toISOString()
-    };
-
-    const { data, error } = await supabase
-      .from('gastos_itens')
-      .insert([payload])
-      .select()
-      .single();
-
-    if (error) {
-      return new Response(
-        JSON.stringify({ sucesso: false, erro: error.message || "Erro ao gravar registro no banco de dados Supabase." }),
-        { status: 500, headers: webHeaders }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        sucesso: true,
-        mensagem: "Gasto registrado com sucesso",
-        registro: data
-      }),
-      { status: 200, headers: webHeaders }
-    );
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ sucesso: false, erro: err.message || "Erro interno do servidor ao processar requisição." }),
-      { status: 500, headers: webHeaders }
-    );
   }
 }
