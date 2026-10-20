@@ -122,17 +122,37 @@ const Gastos: React.FC<GastosProps> = ({ currentMonth }) => {
     }, 3500);
   };
 
+  const MESES_NOMES = [
+    "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+    "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
+  ];
+
   const mesReferencia = useMemo(() => {
     return `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
   }, [currentMonth.nome, currentMonth.ano]);
 
+  const monthIdx = useMemo(() => {
+    const idx = MESES_NOMES.indexOf(currentMonth.nome.trim().toUpperCase()) + 1;
+    return idx > 0 ? idx : 0;
+  }, [currentMonth.nome]);
+
+  const mmStr = useMemo(() => {
+    return monthIdx > 0 ? String(monthIdx).padStart(2, '0') : '';
+  }, [monthIdx]);
+
   const fetchGastos = async () => {
     setLoading(true);
     try {
+      const orConditions = [`mes_referencia.eq.${mesReferencia}`];
+      if (mmStr) {
+        orConditions.push(`mes_referencia.eq.${mmStr}/${currentMonth.ano}`);
+        orConditions.push(`mes_referencia.eq.${currentMonth.ano}-${mmStr}`);
+      }
+
       const { data, error } = await supabaseClient
         .from('gastos_itens')
         .select('*')
-        .eq('mes_referencia', mesReferencia)
+        .or(orConditions.join(','))
         .order('created_at', { ascending: false });
 
       if (error) {

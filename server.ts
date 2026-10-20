@@ -19,9 +19,19 @@ app.use(express.json());
 
 // Inicialização do cliente Supabase para o backend
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
+// Prioritiza a SERVICE_ROLE_KEY administrativa para ignorar restrições de RLS no servidor
+const SUPABASE_KEY = 
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 
+  process.env.SUPABASE_KEY || 
+  process.env.SUPABASE_ANON_KEY || 
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
 
 const MESES_NOMES = [
   "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
@@ -73,9 +83,10 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
   const apiKey = req.headers['x-api-key'] || req.headers['X-API-KEY'] || req.headers['x-api-token'];
   const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
 
-  if (!apiKey || apiKey !== configuredKey) {
+  if (!apiKey || String(apiKey).trim() !== String(configuredKey).trim()) {
     return res.status(401).json({
-      error: "Acesso não autorizado. Header 'x-api-key' inválido ou ausente."
+      sucesso: false,
+      erro: "Chave de API inválida"
     });
   }
 
@@ -85,7 +96,8 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
   const canonicalCategoria = normalizeCategoria(categoria);
   if (!canonicalCategoria) {
     return res.status(400).json({
-      error: "Categoria inválida. Categorias permitidas: 'Restaurante', 'Lazer' ou 'Conveniência'."
+      sucesso: false,
+      erro: "Dados inválidos: Categoria permitida apenas 'Restaurante', 'Lazer' ou 'Conveniência'."
     });
   }
 
@@ -98,13 +110,15 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
     numVal = parseFloat(cleaned);
   } else {
     return res.status(400).json({
-      error: "Campo 'valor' obrigatório e deve ser numérico."
+      sucesso: false,
+      erro: "Dados inválidos: Campo 'valor' deve ser numérico."
     });
   }
 
   if (isNaN(numVal) || numVal <= 0) {
     return res.status(400).json({
-      error: "O campo 'valor' deve ser um número maior que zero."
+      sucesso: false,
+      erro: "Dados inválidos: O campo 'valor' deve ser maior que zero."
     });
   }
 
@@ -134,27 +148,22 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
     if (error) {
       console.error("Erro Supabase ao salvar gasto:", error);
       return res.status(500).json({
-        error: "Falha na persistência no banco de dados.",
-        details: error.message
+        sucesso: false,
+        erro: error.message || "Erro ao gravar registro no banco de dados Supabase."
       });
     }
 
     return res.status(201).json({
-      success: true,
-      message: `Gasto de R$ ${valorFinal.toFixed(2).replace('.', ',')} em ${canonicalCategoria} registrado com sucesso!`,
-      gasto: {
-        id: data.id,
-        categoria: data.categoria,
-        valor: data.valor,
-        mes_referencia: data.mes_referencia,
-        created_at: data.created_at
-      }
+      sucesso: true,
+      mensagem: "Gasto registrado com sucesso",
+      registro: data,
+      gasto: data
     });
   } catch (err: any) {
     console.error("Erro interno no endpoint de gastos:", err);
     return res.status(500).json({
-      error: "Erro interno do servidor ao processar gasto.",
-      details: err.message || String(err)
+      sucesso: false,
+      erro: err.message || "Erro interno do servidor ao processar gasto."
     });
   }
 };
@@ -167,6 +176,7 @@ app.post('/api/gastos/adicionar', handleRegistrarGasto);
 app.get('/api/gastos/status', async (req, res) => {
   const mesAtivo = await getActiveReferenceMonth();
   res.json({
+    sucesso: true,
     status: 'online',
     mes_referencia_ativo: mesAtivo,
     categorias_permitidas: ['Restaurante', 'Lazer', 'Conveniência']
