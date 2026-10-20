@@ -125,7 +125,6 @@ const getLocalDB = (): Record<string, any[]> => {
     despesas_pix_credito: DEFAULT_DESPESAS_PIX,
     parcelamentos: DEFAULT_PARCELAMENTOS,
     banco_despesas: DEFAULT_BANCO_DESPESAS,
-    gastos_itens: [],
     configuracoes: [{ id: 1, chave: "taxa_pix", valor: "4.99" }]
   };
   saveLocalDB(newDB);
