@@ -110,6 +110,10 @@ const getLocalDB = (): Record<string, any[]> => {
           saveLocalDB(parsed);
         }
       }
+      if (parsed && !Array.isArray(parsed.gastos_itens)) {
+        parsed.gastos_itens = [];
+        saveLocalDB(parsed);
+      }
       return parsed;
     } catch (e) {
       console.error("Erro parsing fallback Local Storage DB:", e);
@@ -125,6 +129,7 @@ const getLocalDB = (): Record<string, any[]> => {
     despesas_pix_credito: DEFAULT_DESPESAS_PIX,
     parcelamentos: DEFAULT_PARCELAMENTOS,
     banco_despesas: DEFAULT_BANCO_DESPESAS,
+    gastos_itens: [],
     configuracoes: [{ id: 1, chave: "taxa_pix", valor: "4.99" }]
   };
   saveLocalDB(newDB);
