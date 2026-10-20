@@ -68,27 +68,17 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
     }
   };
 
-  // Sanitização rigorosa para ponto flutuante monetário (exatamente 2 casas decimais)
-  const sanitizeMoney = (val: number | null | undefined): number => {
-    if (val == null || isNaN(val) || !isFinite(val)) return 0;
-    return Math.round(Number(val) * 100) / 100;
-  };
-
   const maskCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const amount = Number(digits) / 100;
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
     }).format(amount);
   };
 
-  const parseCurrency = (value: string): number => {
-    const clean = value.replace(/[^\d,]/g, '').replace(',', '.');
-    const num = parseFloat(clean) || 0;
-    return sanitizeMoney(num);
+  const parseCurrency = (value: string) => {
+    return parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
   };
 
   const formatDateSafe = (dateStr: string | null | undefined) => {
@@ -125,9 +115,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
       fields.forEach(f => {
         const found = data?.find(d => d.descricao === f);
-        const val = sanitizeMoney(found ? found.valor : 0);
-        const cents = Math.round(val * 100);
-        initialFields[f] = maskCurrency(cents.toString());
+        initialFields[f] = maskCurrency(found ? (found.valor * 100).toString() : '0');
       });
       setSpecialFields(initialFields);
     }
@@ -174,11 +162,9 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
 
   const openEditExpenseModal = (exp: BankExpense) => {
     setEditingExpId(exp.id);
-    const sanitizedVal = sanitizeMoney(exp.valor);
-    const cents = Math.round(sanitizedVal * 100);
     setExpForm({
       desc: exp.descricao,
-      val: maskCurrency(cents.toString()),
+      val: maskCurrency((exp.valor * 100).toString()),
       date: exp.data
     });
     setShowExpenseModal(true);

@@ -167,47 +167,20 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   }, [triggerAdd]);
 
-  // Sanitização rigorosa para ponto flutuante monetário (exatamente 2 casas decimais)
-  const sanitizeMoney = (val: number | null | undefined): number => {
-    if (val == null || isNaN(val) || !isFinite(val)) return 0;
-    return Math.round(Number(val) * 100) / 100;
-  };
-
   const maskCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
     const amount = Number(digits) / 100;
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amount);
   };
 
-  const parseCurrency = (value: string): number => {
-    const clean = value.replace(/[^\d,]/g, '').replace(',', '.');
-    const num = parseFloat(clean) || 0;
-    return sanitizeMoney(num);
-  };
-
-  const formatCurrency = (val: number | null | undefined): string => {
-    const safeVal = sanitizeMoney(val);
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(safeVal);
-  };
+  const parseCurrency = (value: string) => parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const openEditModal = (item: Installment) => {
     setEditingId(item.id);
-    const sanitizedVal = sanitizeMoney(item.valor_parcela);
-    // Multiplica por 100 e arredonda para evitar dízima/ponto flutuante na conversão para centavos
-    const cents = Math.round(sanitizedVal * 100);
     setFormData({
       desc: item.descricao || '',
-      val: maskCurrency(cents.toString()),
+      val: maskCurrency(((item.valor_parcela || 0) * 100).toString()),
       atual: (item.parcela_atual ?? 1).toString(),
       total: (item.total_parcelas ?? 1).toString(),
       banco_id: item.banco_id != null ? String(item.banco_id) : ''

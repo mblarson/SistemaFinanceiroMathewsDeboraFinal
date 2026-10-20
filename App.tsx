@@ -13,8 +13,7 @@ import {
   Plus,
   Clock,
   CalendarDays,
-  Calculator as CalcIcon,
-  ShoppingBag
+  Calculator as CalcIcon
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
@@ -25,9 +24,7 @@ import Banks from './components/Banks';
 import Closing from './components/Closing';
 import Installments from './components/Installments';
 import Calculator from './components/Calculator';
-import Gastos from './components/Gastos';
 import { InstallBanner } from './components/InstallBanner';
-
 
 const App: React.FC = () => {
   const [view, setView] = useState<string>('overview');
@@ -99,16 +96,13 @@ const App: React.FC = () => {
     banks: 'Cartões',
     installments: 'Parcelas',
     closing: 'Arquivo',
-    calculator: 'Calculadora',
-    gastos: 'Gastos'
+    calculator: 'Calculadora'
   };
 
   useEffect(() => {
     init();
     if (window.location.pathname === '/calculadora') {
       setView('calculator');
-    } else if (window.location.pathname === '/gastos') {
-      setView('gastos');
     }
   }, []);
 
@@ -254,7 +248,7 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
     
     // Atualiza a URL para suporte básico a rotas (opcional, mas solicitado pelo usuário)
-    const path = newView === 'calculator' ? '/calculadora' : newView === 'gastos' ? '/gastos' : '/';
+    const path = newView === 'calculator' ? '/calculadora' : '/';
     window.history.pushState({}, '', path);
   };
 
@@ -321,7 +315,6 @@ const App: React.FC = () => {
                 <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={view === 'overview'} onClick={() => handleNavigate('overview')} />
                 <NavItem icon={<Receipt size={20} />} label="Despesas" active={view === 'expenses'} onClick={() => handleNavigate('expenses')} />
                 <NavItem icon={<TrendingUp size={20} />} label="Receitas" active={view === 'revenue'} onClick={() => handleNavigate('revenue')} />
-                <NavItem icon={<ShoppingBag size={20} />} label="Gastos" active={view === 'gastos'} onClick={() => handleNavigate('gastos')} />
               </div>
             </div>
             
@@ -471,7 +464,6 @@ const App: React.FC = () => {
           {view === 'overview' && <Overview key={`ov-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} refresh={handleGlobalRefresh} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
-          {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'installments' && <Installments key={`in-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
