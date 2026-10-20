@@ -1,160 +1,167 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   UtensilsCrossed, 
-  Gamepad2, 
-  Store, 
+  Sparkles, 
+  ShoppingBag, 
   Plus, 
-  Trash2, 
   X as LucideX, 
-  Calendar, 
+  Trash2, 
   Clock, 
+  Calendar, 
   CheckCircle2, 
-  AlertCircle, 
-  ArrowUpRight,
-  Receipt,
-  FileText,
-  Copy,
-  Check,
-  ChevronRight
+  AlertCircle,
+  AlertTriangle,
+  ArrowUpRight
 } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
-import { Month, GastoItem, GastoCategoria } from '../types';
+import { Month, GastoCategoria, GastoItem } from '../types';
 
 interface GastosProps {
   currentMonth: Month;
-  triggerAdd?: number;
 }
 
-interface CategoryMeta {
-  key: GastoCategoria;
-  name: string;
-  icon: React.ReactNode;
-  accentBg: string;
-  accentText: string;
+interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
+}
+
+const CATEGORIAS_CONFIG: Record<GastoCategoria, {
+  label: string;
+  descricao: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  accentColor: string;
+  bgLight: string;
   borderColor: string;
-  lightBg: string;
-  description: string;
-}
-
-const CATEGORIAS_CONFIG: CategoryMeta[] = [
-  {
-    key: 'Restaurante',
-    name: 'Restaurante',
-    icon: <UtensilsCrossed size={24} />,
-    accentBg: 'bg-orange-500',
-    accentText: 'text-orange-600',
-    borderColor: 'border-orange-100 hover:border-orange-300',
-    lightBg: 'bg-orange-50',
-    description: 'Almoços, jantares, lanches e delivery'
+  textColor: string;
+}> = {
+  Restaurante: {
+    label: 'Restaurante',
+    descricao: 'Alimentação fora, jantares e lanches',
+    icon: UtensilsCrossed,
+    accentColor: 'from-orange-500 to-amber-600',
+    bgLight: 'bg-orange-50',
+    borderColor: 'border-orange-100 hover:border-orange-200',
+    textColor: 'text-orange-700'
   },
-  {
-    key: 'Lazer',
-    name: 'Lazer',
-    icon: <Gamepad2 size={24} />,
-    accentBg: 'bg-indigo-500',
-    accentText: 'text-indigo-600',
-    borderColor: 'border-indigo-100 hover:border-indigo-300',
-    lightBg: 'bg-indigo-50',
-    description: 'Passeios, entretenimento, viagens e cinema'
+  Lazer: {
+    label: 'Lazer',
+    descricao: 'Passeios, entretenimento e hobbies',
+    icon: Sparkles,
+    accentColor: 'from-purple-500 to-indigo-600',
+    bgLight: 'bg-purple-50',
+    borderColor: 'border-purple-100 hover:border-purple-200',
+    textColor: 'text-purple-700'
   },
-  {
-    key: 'Conveniência',
-    name: 'Conveniência',
-    icon: <Store size={24} />,
-    accentBg: 'bg-emerald-500',
-    accentText: 'text-emerald-600',
-    borderColor: 'border-emerald-100 hover:border-emerald-300',
-    lightBg: 'bg-emerald-50',
-    description: 'Farmácia, padaria, compras rápidas e imprevistos'
+  'Conveniência': {
+    label: 'Conveniência',
+    descricao: 'Compras rápidas, farmácia e utilidades',
+    icon: ShoppingBag,
+    accentColor: 'from-emerald-500 to-teal-600',
+    bgLight: 'bg-emerald-50',
+    borderColor: 'border-emerald-100 hover:border-emerald-200',
+    textColor: 'text-emerald-700'
   }
-];
-
-export const formatBRL = (val: number): string => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(val || 0);
 };
 
-export const maskCurrencyInput = (value: string): string => {
-  const digits = value.replace(/\D/g, '');
+const maskCurrency = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
   const amount = Number(digits) / 100;
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
-    currency: 'BRL'
+    currency: 'BRL',
   }).format(amount);
 };
 
-export const parseCurrencyInput = (value: string): number => {
+const parseCurrency = (value: string): number => {
   return parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
 };
 
-const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd }) => {
-  const [items, setItems] = useState<GastoItem[]>([]);
+const formatCurrency = (val: number): string => {
+  return new Intl.NumberFormat('pt-BR', { 
+    style: 'currency', 
+    currency: 'BRL' 
+  }).format(val);
+};
+
+const formatDateTime = (isoStr: string | undefined) => {
+  if (!isoStr) return { data: 'S/D', hora: '--:--' };
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return { data: 'S/D', hora: '--:--' };
+    const data = d.toLocaleDateString('pt-BR');
+    const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return { data, hora };
+  } catch {
+    return { data: 'S/D', hora: '--:--' };
+  }
+};
+
+const Gastos: React.FC<GastosProps> = ({ currentMonth }) => {
+  const [itens, setItens] = useState<GastoItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<GastoCategoria | null>(null);
-
-  // Formulário de Adicionar Gasto
-  const [isAdding, setIsAdding] = useState(false);
-  const [formValor, setFormValor] = useState('R$ 0,00');
-  const [formDataStr, setFormDataStr] = useState(new Date().toISOString().split('T')[0]);
-  const [formHora, setFormHora] = useState(
-    new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  );
-  const [formObs, setFormObs] = useState('');
+  const [activeCategory, setActiveCategory] = useState<GastoCategoria | null>(null);
+  
+  // Form state
+  const [valorInput, setValorInput] = useState<string>('R$ 0,00');
+  const [dataInput, setDataInput] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
-
-  // Confirmação customizada de exclusão (sem window.confirm)
+  
+  // Custom delete confirmation modal state
   const [itemToDelete, setItemToDelete] = useState<GastoItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Sistema de Notificação Toast interno (sem window.alert)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // In-app Toast notifications (no window.alert / confirm)
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Referência do mês ativo em formato de texto uniforme
-  const mesReferencia = `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts(prev => [...prev, { id, type, message }]);
     setTimeout(() => {
-      setToast(null);
+      setToasts(prev => prev.filter(t => t.id !== id));
     }, 3500);
   };
 
-  // Carrega lançamentos do Supabase para o mês de referência selecionado
+  const MESES_NOMES = [
+    "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+    "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
+  ];
+
+  const mesReferencia = useMemo(() => {
+    return `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
+  }, [currentMonth.nome, currentMonth.ano]);
+
+  const monthIdx = useMemo(() => {
+    const idx = MESES_NOMES.indexOf(currentMonth.nome.trim().toUpperCase()) + 1;
+    return idx > 0 ? idx : 0;
+  }, [currentMonth.nome]);
+
+  const mmStr = useMemo(() => {
+    return monthIdx > 0 ? String(monthIdx).padStart(2, '0') : '';
+  }, [monthIdx]);
+
   const fetchGastos = async () => {
     setLoading(true);
     try {
+      const orConditions = [`mes_referencia.eq.${mesReferencia}`];
+      if (mmStr) {
+        orConditions.push(`mes_referencia.eq.${mmStr}/${currentMonth.ano}`);
+        orConditions.push(`mes_referencia.eq.${currentMonth.ano}-${mmStr}`);
+      }
+
       const { data, error } = await supabaseClient
         .from('gastos_itens')
         .select('*')
-        .eq('mes_referencia', mesReferencia)
+        .or(orConditions.join(','))
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Aviso ao carregar gastos do Supabase, buscando fallback local:', error.message);
-        const rawLocal = localStorage.getItem('supabase_fallback_db');
-        if (rawLocal) {
-          try {
-            const db = JSON.parse(rawLocal);
-            const localGastos = (db.gastos_itens || []).filter(
-              (item: any) => item.mes_referencia === mesReferencia
-            );
-            setItems(localGastos);
-          } catch {
-            setItems([]);
-          }
-        } else {
-          setItems([]);
-        }
-      } else {
-        setItems(data || []);
+        console.warn('Erro ao carregar gastos do Supabase:', error.message);
       }
+      setItens((data as GastoItem[]) || []);
     } catch (err: any) {
-      console.error('Erro ao buscar gastos:', err);
-      setItems([]);
+      console.warn('Falha na consulta de gastos:', err);
+      setItens([]);
     } finally {
       setLoading(false);
     }
@@ -162,473 +169,409 @@ const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd }) => {
 
   useEffect(() => {
     fetchGastos();
-  }, [currentMonth.id, currentMonth.nome, currentMonth.ano]);
+  }, [mesReferencia]);
 
-  // Se o botão "+" global do sistema for clicado na tela de Gastos
-  useEffect(() => {
-    if (triggerAdd && triggerAdd > 0) {
-      setSelectedCategory('Restaurante');
-      setIsAdding(true);
-      setFormValor('R$ 0,00');
-      setFormDataStr(new Date().toISOString().split('T')[0]);
-      setFormHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-      setFormObs('');
-    }
-  }, [triggerAdd]);
+  // Totais por categoria
+  const totais = useMemo(() => {
+    const acumulado: Record<GastoCategoria, number> = {
+      Restaurante: 0,
+      Lazer: 0,
+      'Conveniência': 0
+    };
 
-  // Itens filtrados pela categoria selecionada
-  const categoryItems = selectedCategory
-    ? items.filter((item) => {
-        const itemCat = (item.categoria || '')
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase();
-        const selCat = selectedCategory
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase();
-        return itemCat === selCat;
-      })
-    : [];
+    itens.forEach(item => {
+      if (item.categoria && acumulado[item.categoria] !== undefined) {
+        acumulado[item.categoria] += Number(item.valor) || 0;
+      }
+    });
 
-  // Cálculo dos totais acumulados por categoria (iniciam rigorosamente em R$ 0,00)
-  const getCategoryTotal = (cat: GastoCategoria): number => {
-    const catClean = cat.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    return items
-      .filter((i) => (i.categoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === catClean)
-      .reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
+    return acumulado;
+  }, [itens]);
+
+  const totalGeral = useMemo(() => {
+    return totais.Restaurante + totais.Lazer + totais['Conveniência'];
+  }, [totais]);
+
+  const openCategoryModal = (cat: GastoCategoria) => {
+    setActiveCategory(cat);
+    setValorInput('R$ 0,00');
+    setDataInput(new Date().toISOString().split('T')[0]);
   };
 
-  const getCategoryCount = (cat: GastoCategoria): number => {
-    const catClean = cat.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    return items.filter((i) => (i.categoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === catClean).length;
+  const closeCategoryModal = () => {
+    if (submitting) return;
+    setActiveCategory(null);
+    setValorInput('R$ 0,00');
   };
 
-  // Total acumulado geral do módulo Gastos no mês atual
-  const totalGeral = items.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
-
-  // Abertura do modal de histórico da categoria
-  const handleOpenCategory = (cat: GastoCategoria) => {
-    setSelectedCategory(cat);
-    setIsAdding(false);
-    setFormValor('R$ 0,00');
-    setFormDataStr(new Date().toISOString().split('T')[0]);
-    setFormHora(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-    setFormObs('');
-  };
-
-  const handleCloseModal = () => {
-    setSelectedCategory(null);
-    setIsAdding(false);
-    setItemToDelete(null);
-  };
-
-  // Submissão de novo gasto no fluxo
-  const handleSaveGasto = async (e: React.FormEvent) => {
+  const handleAddGasto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCategory || submitting) return;
+    if (!activeCategory || submitting) return;
 
-    const valorNumerico = parseCurrencyInput(formValor);
+    const valorNumerico = parseCurrency(valorInput);
     if (valorNumerico <= 0) {
-      showToast('Informe um valor maior que zero.', 'error');
+      showToast('Por favor, informe um valor maior que zero.', 'error');
       return;
     }
 
     setSubmitting(true);
     try {
-      // Monta data e hora
-      let createdIso = new Date().toISOString();
-      if (formDataStr) {
-        const timePart = formHora ? `${formHora}:00` : '12:00:00';
-        try {
-          const combined = new Date(`${formDataStr}T${timePart}`);
-          if (!isNaN(combined.getTime())) {
-            createdIso = combined.toISOString();
-          }
-        } catch {
-          // mantém default ISO
+      // Criação com data/hora escolhida ou atual
+      const selectedDate = new Date();
+      if (dataInput) {
+        const parts = dataInput.split('-');
+        if (parts.length === 3) {
+          selectedDate.setFullYear(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
         }
       }
 
-      const novoGastoPayload = {
-        categoria: selectedCategory,
+      const payload = {
+        categoria: activeCategory,
         valor: Number(valorNumerico.toFixed(2)),
         mes_referencia: mesReferencia,
-        created_at: createdIso,
-        observacao: formObs.trim() || undefined
+        created_at: selectedDate.toISOString()
       };
 
-      let itemSalvo: GastoItem;
+      const { data, error } = await supabaseClient
+        .from('gastos_itens')
+        .insert([payload])
+        .select()
+        .single();
 
-      try {
-        const { data, error } = await supabaseClient
-          .from('gastos_itens')
-          .insert([novoGastoPayload])
-          .select()
-          .single();
-
-        if (error) throw error;
-        itemSalvo = data;
-      } catch (sbError: any) {
-        console.warn('Persistindo localmente devido ao status do banco:', sbError.message);
-        itemSalvo = {
-          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}`,
-          ...novoGastoPayload
-        };
-        // Salva no banco de fallback local
-        const rawLocal = localStorage.getItem('supabase_fallback_db');
-        const db = rawLocal ? JSON.parse(rawLocal) : {};
-        if (!Array.isArray(db.gastos_itens)) db.gastos_itens = [];
-        db.gastos_itens.unshift(itemSalvo);
-        localStorage.setItem('supabase_fallback_db', JSON.stringify(db));
+      if (error) {
+        throw new Error(error.message);
       }
 
-      // Atualiza o estado local somando o valor acumulado ao card
-      setItems((prev) => [itemSalvo, ...prev]);
-      setIsAdding(false);
-      setFormValor('R$ 0,00');
-      setFormObs('');
+      // Adiciona na lista local para resposta instantânea
+      const newItem: GastoItem = (data as GastoItem) || {
+        id: Date.now(),
+        ...payload
+      };
 
-      showToast(`Gasto de ${formatBRL(valorNumerico)} adicionado em ${selectedCategory}!`, 'success');
+      setItens(prev => [newItem, ...prev]);
+      setValorInput('R$ 0,00');
+      showToast(`${formatCurrency(valorNumerico)} adicionado a ${activeCategory}!`, 'success');
     } catch (err: any) {
-      console.error('Erro ao salvar gasto:', err);
-      showToast('Falha ao registrar gasto: ' + (err.message || 'Erro inesperado'), 'error');
+      showToast(`Erro ao registrar gasto: ${err.message || 'Falha na conexão'}`, 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Exclusão de lançamento
-  const handleDeleteItem = async () => {
+  const confirmDeleteGasto = async () => {
     if (!itemToDelete || deleting) return;
-
     setDeleting(true);
     try {
-      try {
-        const { error } = await supabaseClient
-          .from('gastos_itens')
-          .delete()
-          .eq('id', itemToDelete.id);
+      const { error } = await supabaseClient
+        .from('gastos_itens')
+        .delete()
+        .eq('id', itemToDelete.id);
 
-        if (error) throw error;
-      } catch (sbErr) {
-        // Fallback local
-        const rawLocal = localStorage.getItem('supabase_fallback_db');
-        if (rawLocal) {
-          const db = JSON.parse(rawLocal);
-          if (Array.isArray(db.gastos_itens)) {
-            db.gastos_itens = db.gastos_itens.filter((i: any) => i.id !== itemToDelete.id);
-            localStorage.setItem('supabase_fallback_db', JSON.stringify(db));
-          }
-        }
-      }
+      if (error) throw new Error(error.message);
 
-      setItems((prev) => prev.filter((i) => i.id !== itemToDelete.id));
-      showToast('Lançamento excluído com sucesso.', 'success');
+      setItens(prev => prev.filter(i => String(i.id) !== String(itemToDelete.id)));
+      showToast('Lançamento excluído com sucesso.', 'info');
       setItemToDelete(null);
     } catch (err: any) {
-      console.error('Erro ao excluir item:', err);
-      showToast('Erro ao excluir: ' + (err.message || 'Erro desconhecido'), 'error');
+      showToast(`Erro ao excluir: ${err.message || 'Erro inesperado'}`, 'error');
     } finally {
       setDeleting(false);
     }
   };
 
-  const selectedMeta = CATEGORIAS_CONFIG.find((c) => c.key === selectedCategory);
+  const itensDaCategoriaAtiva = useMemo(() => {
+    if (!activeCategory) return [];
+    return itens.filter(i => i.categoria === activeCategory);
+  }, [itens, activeCategory]);
+
+  const canEdit = currentMonth.status !== 'fechado';
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Toast Notifier */}
-      {toast && (
-        <div 
-          className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-black tracking-wide transition-all duration-300 animate-in slide-in-from-top-3 ${
-            toast.type === 'success' 
-              ? 'bg-gray-900 text-white border-emerald-500/50 shadow-emerald-950/20' 
-              : 'bg-red-950 text-white border-red-500/50 shadow-red-950/20'
-          }`}
-        >
-          {toast.type === 'success' ? (
-            <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
-          ) : (
-            <AlertCircle size={20} className="text-red-400 shrink-0" />
-          )}
-          <span>{toast.message}</span>
+      {/* Toast Notification Container */}
+      <div className="fixed top-5 right-5 z-[150] space-y-2 pointer-events-none max-w-sm w-full px-4">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto p-4 rounded-2xl shadow-xl border flex items-center gap-3 transition-all animate-in slide-in-from-top-3 ${
+              toast.type === 'success' 
+                ? 'bg-gray-900 text-white border-gray-800' 
+                : toast.type === 'error'
+                  ? 'bg-rose-900 text-white border-rose-800'
+                  : 'bg-white text-gray-900 border-gray-200'
+            }`}
+          >
+            {toast.type === 'success' && <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />}
+            {toast.type === 'error' && <AlertCircle size={18} className="text-rose-400 shrink-0" />}
+            {toast.type === 'info' && <AlertTriangle size={18} className="text-amber-500 shrink-0" />}
+            <p className="text-xs font-bold leading-snug">{toast.message}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Cabeçalho Limpo e Direto */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Gastos</h1>
+        {!loading && (
+          <div className="text-right">
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Total Acumulado</span>
+            <span className="text-xl font-black text-gray-900 tracking-tight leading-none">
+              {formatCurrency(totalGeral)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Cards das 3 Categorias */}
+      {loading ? (
+        <div className="py-20 flex flex-col items-center gap-3 text-gray-400">
+          <div className="w-8 h-8 border-3 border-gray-900 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-bold uppercase tracking-widest text-[9px]">Carregando Gastos...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {(Object.keys(CATEGORIAS_CONFIG) as GastoCategoria[]).map((catKey) => {
+            const config = CATEGORIAS_CONFIG[catKey];
+            const Icon = config.icon;
+            const valorTotal = totais[catKey] || 0;
+            const count = itens.filter(i => i.categoria === catKey).length;
+
+            return (
+              <div
+                key={catKey}
+                onClick={() => openCategoryModal(catKey)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openCategoryModal(catKey);
+                  }
+                }}
+                className={`group relative bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden text-left`}
+              >
+                {/* Linha de topo com ícone e badge de contagem */}
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className={`p-4 rounded-2xl ${config.bgLight} ${config.textColor} transition-transform duration-300 group-hover:scale-110 shadow-sm`}>
+                      <Icon size={24} />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-gray-400 group-hover:text-gray-900 transition-colors">
+                      <span className="text-[10px] font-black uppercase tracking-wider">
+                        {count} {count === 1 ? 'registro' : 'registros'}
+                      </span>
+                      <ArrowUpRight size={16} />
+                    </div>
+                  </div>
+
+                  <h3 className="text-base font-black text-gray-900 uppercase tracking-tight mb-1">
+                    {config.label}
+                  </h3>
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-6">
+                    {config.descricao}
+                  </p>
+                </div>
+
+                {/* Valor Acumulado */}
+                <div className="pt-4 border-t border-gray-50 flex items-end justify-between">
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Mês de Referência
+                    </span>
+                    <span className="text-2xl font-black text-gray-900 tracking-tight block">
+                      {formatCurrency(valorTotal)}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-black text-gray-900 bg-gray-100 px-3 py-1.5 rounded-xl uppercase tracking-wider group-hover:bg-gray-900 group-hover:text-white transition-colors">
+                    Adicionar
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* CABEÇALHO LIMPO E PROFISSIONAL */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-100">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-black text-gray-900 tracking-tight uppercase">
-            Gastos
-          </h1>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-            Acompanhamento Pessoal &bull; {currentMonth.nome} {currentMonth.ano}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-2.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Acumulado:</span>
-            <span className="text-base font-black text-gray-900">{formatBRL(totalGeral)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* GRID DOS 3 CARDS DE CATEGORIAS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {CATEGORIAS_CONFIG.map((cat) => {
-          const totalCat = getCategoryTotal(cat.key);
-          const countCat = getCategoryCount(cat.key);
-
-          return (
-            <div
-              key={cat.key}
-              onClick={() => handleOpenCategory(cat.key)}
-              className={`group relative bg-white rounded-[2rem] p-6 lg:p-8 border ${cat.borderColor} shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden`}
-            >
-              {/* Topo do Card */}
-              <div className="flex items-start justify-between mb-6">
-                <div className={`p-3.5 rounded-2xl ${cat.lightBg} ${cat.accentText} group-hover:scale-110 transition-transform duration-300`}>
-                  {cat.icon}
-                </div>
-                <div className="flex items-center gap-1.5 text-gray-400 group-hover:text-gray-900 transition-colors">
-                  <span className="text-[10px] font-black uppercase tracking-widest">Ver &bull; Lançar</span>
-                  <ArrowUpRight size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </div>
-              </div>
-
-              {/* Corpo com Categoria e Valor Acumulado */}
-              <div className="space-y-2">
-                <h2 className="text-lg font-black text-gray-900 tracking-tight uppercase">
-                  {cat.name}
-                </h2>
-                <div className="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight">
-                  {formatBRL(totalCat)}
-                </div>
-              </div>
-
-              {/* Rodapé com contagem de lançamentos */}
-              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-gray-400">
-                <span>{countCat} {countCat === 1 ? 'lançamento' : 'lançamentos'}</span>
-                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-black">
-                  {totalCat > 0 ? 'Ativo no mês' : 'Zerado (R$ 0,00)'}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* MODAL / PAINEL DE HISTÓRICO DA CATEGORIA (SEM ALERT/CONFIRM, MOBILE-SAFE COM SCROLL INTERNO) */}
-      {selectedCategory && selectedMeta && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div 
-            className="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-gray-200 flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Cabeçalho do Modal */}
-            <div className="p-6 lg:p-8 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-              <div className="flex items-center gap-3.5">
-                <div className={`p-3 rounded-2xl ${selectedMeta.lightBg} ${selectedMeta.accentText}`}>
-                  {selectedMeta.icon}
+      {/* MODAL DE HISTÓRICO & ADICIONAR GASTO */}
+      {activeCategory && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-2xl ${CATEGORIAS_CONFIG[activeCategory].bgLight} ${CATEGORIAS_CONFIG[activeCategory].textColor}`}>
+                  {React.createElement(CATEGORIAS_CONFIG[activeCategory].icon, { size: 22 })}
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">
-                    {selectedMeta.name}
-                  </h3>
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                    {currentMonth.nome} {currentMonth.ano} &bull; Total: {formatBRL(getCategoryTotal(selectedCategory))}
+                  <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">
+                    {CATEGORIAS_CONFIG[activeCategory].label}
+                  </h2>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">
+                    {mesReferencia}
                   </p>
                 </div>
               </div>
-
               <button
-                onClick={handleCloseModal}
-                className="p-2.5 rounded-2xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-all"
-                aria-label="Fechar"
+                type="button"
+                onClick={closeCategoryModal}
+                disabled={submitting}
+                className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                title="Fechar"
               >
                 <LucideX size={20} />
               </button>
             </div>
 
-            {/* Conteúdo com scroll interno seguro no mobile */}
-            <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6">
-              {/* Botão de alternar formulário "Adicionar Gasto" */}
-              {!isAdding ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAdding(true)}
-                  className="w-full py-4 px-6 bg-gray-900 hover:bg-black text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
-                >
-                  <Plus size={18} />
-                  <span>Adicionar Gasto</span>
-                </button>
-              ) : (
-                /* Formulário de Adicionar Gasto */
-                <form onSubmit={handleSaveGasto} className="bg-gray-50 border border-gray-200/80 p-5 rounded-3xl space-y-4 animate-in fade-in">
-                  <div className="flex items-center justify-between pb-2 border-b border-gray-200/60">
-                    <span className="text-xs font-black uppercase tracking-wider text-gray-800">
-                      Novo Lançamento em {selectedMeta.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAdding(false)}
-                      className="text-gray-400 hover:text-gray-600 text-xs font-bold"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
+            {/* Modal Body com Scroll Interno para Mobile */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 no-scrollbar">
+              {/* Card de Resumo do Acumulado no Mês */}
+              <div className="bg-gray-50 border border-gray-100 p-5 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">
+                    Acumulado no Mês
+                  </span>
+                  <span className="text-2xl font-black text-gray-900 tracking-tight block mt-0.5">
+                    {formatCurrency(totais[activeCategory] || 0)}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">
+                    {itensDaCategoriaAtiva.length} {itensDaCategoriaAtiva.length === 1 ? 'Lançamento' : 'Lançamentos'}
+                  </span>
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                    {currentMonth.nome} {currentMonth.ano}
+                  </span>
+                </div>
+              </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                      Valor do Gasto *
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      required
-                      value={formValor}
-                      onChange={(e) => setFormValor(maskCurrencyInput(e.target.value))}
-                      placeholder="R$ 0,00"
-                      className="w-full text-2xl font-black px-4 py-3 bg-white border border-gray-200 rounded-2xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all"
-                      autoFocus
-                    />
-                  </div>
+              {/* Formulário de Adicionar Gasto */}
+              {canEdit ? (
+                <form onSubmit={handleAddGasto} className="bg-gray-50/70 p-5 rounded-2xl border border-gray-100 space-y-4">
+                  <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest block">
+                    Novo Lançamento
+                  </span>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                        Data
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                        Valor (R$) *
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={valorInput}
+                        onChange={(e) => setValorInput(maskCurrency(e.target.value))}
+                        placeholder="R$ 0,00"
+                        required
+                        className="w-full bg-white border border-gray-200 focus:border-gray-900 rounded-xl px-4 py-3 text-base font-black text-gray-900 outline-none transition-all shadow-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                        Data *
                       </label>
                       <input
                         type="date"
-                        value={formDataStr}
-                        onChange={(e) => setFormDataStr(e.target.value)}
-                        className="w-full text-xs font-bold px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                        Hora
-                      </label>
-                      <input
-                        type="time"
-                        value={formHora}
-                        onChange={(e) => setFormHora(e.target.value)}
-                        className="w-full text-xs font-bold px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        value={dataInput}
+                        onChange={(e) => setDataInput(e.target.value)}
+                        required
+                        className="w-full bg-white border border-gray-200 focus:border-gray-900 rounded-xl px-4 py-3 text-xs font-bold text-gray-900 outline-none transition-all shadow-xs"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                      Observação (Opcional)
-                    </label>
-                    <input
-                      type="text"
-                      value={formObs}
-                      onChange={(e) => setFormObs(e.target.value)}
-                      placeholder="Ex: Almoço de negócios, lanche..."
-                      className="w-full text-xs font-medium px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                    />
-                  </div>
-
+                  {/* Botão de confirmação 100% visível */}
                   <button
                     type="submit"
-                    disabled={submitting}
-                    className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                    disabled={submitting || parseCurrency(valorInput) <= 0}
+                    className="w-full bg-gray-900 hover:bg-black text-white font-black py-3.5 rounded-xl uppercase tracking-wider text-xs shadow-lg shadow-gray-900/10 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? 'Salvando...' : 'Confirmar e Somar ao Card'}
+                    <Plus size={16} />
+                    {submitting ? 'Adicionando...' : 'Adicionar Gasto'}
                   </button>
                 </form>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-[11px] font-bold text-amber-800 uppercase tracking-wider text-center">
+                  Mês arquivado. Não é possível adicionar novos gastos.
+                </div>
               )}
 
-              {/* Lista de Histórico Interno da Categoria */}
+              {/* Lista do Histórico de Lançamentos */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">
-                    Histórico de Lançamentos ({categoryItems.length})
+                  <h4 className="text-xs font-black uppercase tracking-wider text-gray-800">
+                    Histórico ({itensDaCategoriaAtiva.length})
                   </h4>
-                  <span className="text-[10px] font-bold text-gray-400">
-                    {mesReferencia}
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                    Ordem cronológica
                   </span>
                 </div>
 
-                {categoryItems.length === 0 ? (
-                  <div className="py-10 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                      Nenhum gasto nesta categoria em {currentMonth.nome}.
-                    </p>
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      Clique em "Adicionar Gasto" acima para registrar o primeiro valor.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {categoryItems.map((item) => {
-                      const itemDate = item.created_at ? new Date(item.created_at) : new Date();
-                      const dateStr = !isNaN(itemDate.getTime())
-                        ? itemDate.toLocaleDateString('pt-BR')
-                        : 'Hoje';
-                      const timeStr = !isNaN(itemDate.getTime())
-                        ? itemDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                        : '--:--';
-
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {itensDaCategoriaAtiva.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center">
+                      <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                        Nenhum gasto registrado nesta categoria para este mês.
+                      </p>
+                    </div>
+                  ) : (
+                    itensDaCategoriaAtiva.map((item) => {
+                      const dt = formatDateTime(item.created_at);
                       return (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-gray-100 hover:border-gray-200 shadow-sm transition-all"
+                          className="flex items-center justify-between bg-gray-50 hover:bg-gray-100/70 p-3.5 rounded-2xl border border-gray-100 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-gray-100 rounded-xl text-gray-600">
-                              <Receipt size={16} />
+                            <div className="p-2 rounded-xl bg-white text-gray-500 shadow-xs">
+                              <Clock size={15} />
                             </div>
                             <div>
-                              <div className="text-sm font-black text-gray-900">
-                                {formatBRL(item.valor)}
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-gray-900">
+                                  {dt.data}
+                                </span>
+                                <span className="text-[10px] font-bold text-gray-400">
+                                  às {dt.hora}
+                                </span>
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                <span>{dateStr}</span>
-                                <span>&bull;</span>
-                                <span>{timeStr}</span>
-                                {item.observacao && (
-                                  <>
-                                    <span>&bull;</span>
-                                    <span className="text-gray-600 truncate max-w-[120px]">
-                                      {item.observacao}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                                {item.categoria}
+                              </span>
                             </div>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => setItemToDelete(item)}
-                            className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                            title="Excluir lançamento"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-black text-gray-900">
+                              {formatCurrency(Number(item.valor))}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => setItemToDelete(item)}
+                                title="Excluir Gasto"
+                                className="p-2 text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                    })
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Rodapé fixo do Modal */}
-            <div className="p-4 lg:p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
-              <span className="text-xs font-bold text-gray-500">
-                Total Acumulado: <strong className="text-gray-900 font-black">{formatBRL(getCategoryTotal(selectedCategory))}</strong>
-              </span>
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end shrink-0">
               <button
                 type="button"
-                onClick={handleCloseModal}
-                className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-black text-xs uppercase tracking-wider rounded-xl transition-all"
+                onClick={closeCategoryModal}
+                disabled={submitting}
+                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
               >
                 Fechar
               </button>
@@ -637,36 +580,47 @@ const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd }) => {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (100% IN-APP, SEM CONFIRM DO NAVEGADOR) */}
+      {/* MODAL PRÓPRIO DE CONFIRMAÇÃO DE EXCLUSÃO (SEM ALERT/CONFIRM) */}
       {itemToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-200 text-center space-y-4 animate-in zoom-in-95">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
-              <Trash2 size={24} />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-[120] animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-center border border-gray-100 animate-in zoom-in-95 duration-150">
+            <div className="bg-rose-100 text-rose-600 p-3.5 rounded-2xl w-12 h-12 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
             </div>
-            <div>
-              <h4 className="text-base font-black text-gray-900 uppercase">
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
                 Excluir Lançamento?
-              </h4>
-              <p className="text-xs text-gray-500 mt-1">
-                Deseja remover o lançamento de <strong>{formatBRL(itemToDelete.valor)}</strong> da categoria {itemToDelete.categoria}?
+              </h3>
+              <p className="text-xs font-semibold text-gray-500 leading-relaxed">
+                Deseja realmente remover o gasto de{' '}
+                <strong className="text-gray-900 font-black">
+                  {formatCurrency(Number(itemToDelete.valor))}
+                </strong>{' '}
+                em <strong className="text-gray-900 font-black">{itemToDelete.categoria}</strong>?
               </p>
+              <div className="bg-amber-50 border border-amber-200/60 p-2.5 rounded-xl text-[11px] font-bold text-amber-800 mt-2">
+                O valor será subtraído do total acumulado da categoria.
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setItemToDelete(null)}
-                className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs uppercase rounded-xl transition-all"
+                disabled={deleting}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
+                onClick={confirmDeleteGasto}
                 disabled={deleting}
-                onClick={handleDeleteItem}
-                className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase rounded-xl shadow transition-all"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-rose-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
-                {deleting ? 'Excluindo...' : 'Sim, Excluir'}
+                <Trash2 size={15} />
+                {deleting ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>

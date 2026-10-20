@@ -28,6 +28,7 @@ import Calculator from './components/Calculator';
 import Gastos from './components/Gastos';
 import { InstallBanner } from './components/InstallBanner';
 
+
 const App: React.FC = () => {
   const [view, setView] = useState<string>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -95,33 +96,20 @@ const App: React.FC = () => {
     overview: 'Dashboard',
     expenses: 'Despesas',
     revenue: 'Receitas',
-    gastos: 'Gastos',
     banks: 'Cartões',
     installments: 'Parcelas',
     closing: 'Arquivo',
-    calculator: 'Calculadora'
+    calculator: 'Calculadora',
+    gastos: 'Gastos'
   };
 
   useEffect(() => {
     init();
-    if (window.location.pathname === '/gastos') {
-      setView('gastos');
-    } else if (window.location.pathname === '/calculadora') {
+    if (window.location.pathname === '/calculadora') {
       setView('calculator');
+    } else if (window.location.pathname === '/gastos') {
+      setView('gastos');
     }
-
-    const handlePopState = () => {
-      if (window.location.pathname === '/gastos') {
-        setView('gastos');
-      } else if (window.location.pathname === '/calculadora') {
-        setView('calculator');
-      } else {
-        setView('overview');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const getMonthValue = (m: Month) => {
@@ -266,7 +254,7 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
     
     // Atualiza a URL para suporte básico a rotas (opcional, mas solicitado pelo usuário)
-    const path = newView === 'calculator' ? '/calculadora' : (newView === 'gastos' ? '/gastos' : '/');
+    const path = newView === 'calculator' ? '/calculadora' : newView === 'gastos' ? '/gastos' : '/';
     window.history.pushState({}, '', path);
   };
 
@@ -299,7 +287,7 @@ const App: React.FC = () => {
     );
   }
 
-  const showAddAction = ['expenses', 'revenue', 'installments', 'banks', 'gastos'].includes(view);
+  const showAddAction = ['expenses', 'revenue', 'installments', 'banks'].includes(view);
   const canEdit = currentContextMonth.status !== 'fechado';
 
   return (
@@ -483,7 +471,7 @@ const App: React.FC = () => {
           {view === 'overview' && <Overview key={`ov-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} refresh={handleGlobalRefresh} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
-          {view === 'gastos' && <Gastos key={`gt-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
+          {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'installments' && <Installments key={`in-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}

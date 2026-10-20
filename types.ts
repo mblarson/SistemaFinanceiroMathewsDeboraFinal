@@ -76,10 +76,9 @@ export interface Installment {
 export type GastoCategoria = 'Restaurante' | 'Lazer' | 'Conveniência';
 
 export interface GastoItem {
-  id: string;
-  categoria: GastoCategoria | string;
+  id: number | string;
+  categoria: GastoCategoria;
   valor: number;
   mes_referencia: string;
   created_at: string;
-  observacao?: string;
 }

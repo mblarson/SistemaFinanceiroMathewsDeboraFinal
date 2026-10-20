@@ -110,10 +110,6 @@ const getLocalDB = (): Record<string, any[]> => {
           saveLocalDB(parsed);
         }
       }
-      if (parsed && !Array.isArray(parsed.gastos_itens)) {
-        parsed.gastos_itens = [];
-        saveLocalDB(parsed);
-      }
       return parsed;
     } catch (e) {
       console.error("Erro parsing fallback Local Storage DB:", e);
