@@ -17,21 +17,28 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(cors());
 app.use(express.json());
 
-// Inicialização do cliente Supabase para o backend
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
-// Prioritiza a SERVICE_ROLE_KEY administrativa para ignorar restrições de RLS no servidor
-const SUPABASE_KEY = 
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 
-  process.env.SUPABASE_KEY || 
-  process.env.SUPABASE_ANON_KEY || 
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
+// Inicialização defensiva do cliente Supabase para o backend
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
+  const key = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_KEY || 
+    process.env.SUPABASE_ANON_KEY || 
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false
+  if (!url || !key) {
+    return { client: null, erro: "Variáveis de ambiente do Supabase não configuradas no servidor." };
   }
-});
+
+  try {
+    const client = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    return { client, erro: null };
+  } catch (err: any) {
+    return { client: null, erro: `Falha ao inicializar Supabase: ${err.message || String(err)}` };
+  }
+}
 
 const MESES_NOMES = [
   "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
@@ -39,7 +46,11 @@ const MESES_NOMES = [
 ];
 
 // Helper para obter o mês ativo com exata correspondência visual do sistema
-const getActiveReferenceMonth = async (): Promise<string> => {
+const getActiveReferenceMonth = async (supabase: any): Promise<string> => {
+  const now = new Date();
+  const fallbackMes = `${MESES_NOMES[now.getMonth()]}/${now.getFullYear()}`;
+  if (!supabase) return fallbackMes;
+
   try {
     const { data: meses, error } = await supabase
       .from('meses')
@@ -58,14 +69,10 @@ const getActiveReferenceMonth = async (): Promise<string> => {
       }
     }
   } catch (err) {
-    console.error("Erro ao resolver mês ativo no Supabase:", err);
+    console.warn("Aviso ao resolver mês ativo no Supabase:", err);
   }
 
-  // Fallback baseado na data do servidor em fuso horário de Brasília
-  const now = new Date();
-  const mesAtual = MESES_NOMES[now.getMonth()];
-  const anoAtual = now.getFullYear();
-  return `${mesAtual}/${anoAtual}`;
+  return fallbackMes;
 };
 
 // Validação da categoria
@@ -127,10 +134,18 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
   const valorFinal = Number(numVal.toFixed(2));
 
   try {
+    const { client: supabase, erro: supabaseInitErro } = getSupabaseClient();
+    if (!supabase) {
+      return res.status(500).json({
+        sucesso: false,
+        erro: supabaseInitErro || "Variáveis de ambiente do Supabase não configuradas no servidor."
+      });
+    }
+
     // Resolver o mês de referência correspondente ao mês ativo da interface
     const mesReferencia = customMes && typeof customMes === 'string' && customMes.trim()
       ? customMes.trim().toUpperCase()
-      : await getActiveReferenceMonth();
+      : await getActiveReferenceMonth(supabase);
 
     const payload = {
       categoria: canonicalCategoria,
@@ -170,22 +185,11 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
 
 const handleDiagnostico = async (req: express.Request, res: express.Response) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  try {
-    const mesAtivo = await getActiveReferenceMonth();
-    res.status(200).json({
-      status: "online",
-      servico: "API Gastos - Sistema Mathews e Débora",
-      metodos_permitidos: ["POST"],
-      mes_referencia_ativo: mesAtivo,
-      categorias_permitidas: ["Restaurante", "Lazer", "Conveniência"]
-    });
-  } catch {
-    res.status(200).json({
-      status: "online",
-      servico: "API Gastos - Sistema Mathews e Débora",
-      metodos_permitidos: ["POST"]
-    });
-  }
+  res.status(200).json({
+    status: "online",
+    servico: "API Gastos",
+    timestamp: new Date().toISOString()
+  });
 };
 
 // Rotas da API REST (OPTIONS, GET e POST)

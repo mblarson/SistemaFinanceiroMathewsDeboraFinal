@@ -1,1 +1,1 @@
-export * from '../../../../app/api/gastos/route';
+export { GET, POST, OPTIONS } from '../../../../api/gastos';
