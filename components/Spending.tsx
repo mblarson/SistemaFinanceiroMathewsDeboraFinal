@@ -224,6 +224,27 @@ const Spending: React.FC<SpendingProps> = ({ currentMonth }) => {
 
   useEffect(() => {
     fetchSpending();
+    const handleFocus = () => {
+      fetchSpending();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Assinatura Realtime do Supabase para atualizar a lista ao vivo
+    const channel = supabaseClient
+      .channel(`gastos_realtime_${currentMonth.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'gastos_itens', filter: `mes_id=eq.${currentMonth.id}` },
+        () => {
+          fetchSpending();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      supabaseClient.removeChannel(channel);
+    };
   }, [currentMonth.id]);
 
   // Cálculos de totais por categoria - Valor inicial sempre rigorosamente R$ 0,00 se vazio
@@ -461,7 +482,65 @@ BEGIN
         USING (true) 
         WITH CHECK (true);
     END IF;
-END $$;`;
+END $$;
+
+-- 6. Função RPC para Atalho iOS (opcional: permite gravação direta no Supabase sem depender do servidor web)
+CREATE OR REPLACE FUNCTION public.adicionar_gasto(p_valor NUMERIC, p_categoria TEXT)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_mes_id BIGINT;
+  v_mes_nome TEXT;
+  v_mes_ano INT;
+  v_cat TEXT;
+  v_novo_id BIGINT;
+  v_novo_total NUMERIC;
+BEGIN
+  IF LOWER(TRIM(p_categoria)) IN ('restaurante', 'refeição', 'comida') THEN
+    v_cat := 'Restaurante';
+  ELSIF LOWER(TRIM(p_categoria)) IN ('lazer', 'diversão') THEN
+    v_cat := 'Lazer';
+  ELSIF LOWER(TRIM(p_categoria)) IN ('conveniencia', 'conveniência', 'mercado', 'farmacia') THEN
+    v_cat := 'Conveniência';
+  ELSE
+    RAISE EXCEPTION 'Categoria inválida. Categorias aceitas: Restaurante, Lazer ou Conveniência.';
+  END IF;
+
+  SELECT id, nome, ano INTO v_mes_id, v_mes_nome, v_mes_ano
+  FROM public.meses
+  WHERE status = 'ativo'
+  ORDER BY ano ASC, id ASC
+  LIMIT 1;
+
+  IF v_mes_id IS NULL THEN
+    SELECT id, nome, ano INTO v_mes_id, v_mes_nome, v_mes_ano
+    FROM public.meses
+    ORDER BY id DESC
+    LIMIT 1;
+  END IF;
+
+  INSERT INTO public.gastos_itens (mes_id, categoria, valor, descricao, data, hora, criado_em)
+  VALUES (v_mes_id, v_cat, ROUND(p_valor, 2), v_cat, CURRENT_DATE, TO_CHAR(CURRENT_TIME, 'HH24:MI:SS'), NOW())
+  RETURNING id INTO v_novo_id;
+
+  SELECT COALESCE(SUM(valor), 0) INTO v_novo_total
+  FROM public.gastos_itens
+  WHERE mes_id = v_mes_id AND categoria = v_cat;
+
+  RETURN json_build_object(
+    'success', true,
+    'id', v_novo_id,
+    'categoria', v_cat,
+    'valor', ROUND(p_valor, 2),
+    'novo_acumulador_card', v_novo_total,
+    'mes_referencia', v_mes_nome || ' ' || v_mes_ano
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.adicionar_gasto(NUMERIC, TEXT) TO anon, authenticated, service_role;`;
 
   const copySqlToClipboard = async () => {
     try {
