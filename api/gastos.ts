@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
-// Prioritiza a SERVICE_ROLE_KEY administrativa para ignorar restrições de RLS no servidor
+// Prioritiza a SERVICE_ROLE_KEY para ignorar restrições de RLS no servidor
 const SUPABASE_KEY = 
   process.env.SUPABASE_SERVICE_ROLE_KEY || 
   process.env.SUPABASE_KEY || 
@@ -57,93 +57,96 @@ const normalizeCategoria = (cat: any): 'Restaurante' | 'Lazer' | 'Conveniência'
 };
 
 export default async function handler(req: any, res: any) {
-  // Configuração global de cabeçalhos CORS
+  // Configuração explícita de cabeçalhos JSON e CORS em todas as respostas
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, X-API-KEY');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  try {
+    if (req.method === 'OPTIONS') {
+      return res.status(200).json({ status: 'ok' });
+    }
 
-  if (req.method === 'GET') {
-    const mes = await getActiveReferenceMonth();
-    return res.status(200).json({ 
-      sucesso: true,
-      status: 'online', 
-      mes_referencia_ativo: mes,
-      categorias_permitidas: ['Restaurante', 'Lazer', 'Conveniência']
-    });
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      sucesso: false, 
-      erro: "Método não permitido. Utilize POST." 
-    });
-  }
-
-  // 1. Validação de autenticação via x-api-key
-  const apiKey = req.headers['x-api-key'] || req.headers['X-API-KEY'] || req.headers['x-api-token'];
-  const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
-
-  if (!apiKey || String(apiKey).trim() !== String(configuredKey).trim()) {
-    return res.status(401).json({
-      sucesso: false,
-      erro: "Chave de API inválida"
-    });
-  }
-
-  // 2. Validação do corpo da requisição (JSON)
-  let body = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      return res.status(400).json({
-        sucesso: false,
-        erro: "Dados inválidos: corpo da requisição deve ser um JSON válido."
+    // 1. Método GET para diagnóstico e verificação visual no navegador
+    if (req.method === 'GET') {
+      const mesAtivo = await getActiveReferenceMonth();
+      return res.status(200).json({
+        status: "online",
+        servico: "API Gastos - Sistema Mathews e Débora",
+        metodos_permitidos: ["POST"],
+        mes_referencia_ativo: mesAtivo,
+        categorias_permitidas: ["Restaurante", "Lazer", "Conveniência"]
       });
     }
-  }
-  body = body || {};
 
-  const { valor, categoria, mes_referencia: customMes } = body;
+    if (req.method !== 'POST') {
+      return res.status(405).json({ 
+        sucesso: false, 
+        erro: "Método não permitido. Utilize POST para registrar gastos." 
+      });
+    }
 
-  // Validação estrita de categoria
-  const canonicalCategoria = normalizeCategoria(categoria);
-  if (!canonicalCategoria) {
-    return res.status(400).json({
-      sucesso: false,
-      erro: "Dados inválidos: Categoria permitida apenas 'Restaurante', 'Lazer' ou 'Conveniência'."
-    });
-  }
+    // 2. Validação de autenticação via header x-api-key
+    const apiKey = req.headers['x-api-key'] || req.headers['X-API-KEY'] || req.headers['x-api-token'];
+    const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
 
-  // Validação e conversão estrita do valor com precisão NUMERIC(10,2)
-  let numVal: number;
-  if (typeof valor === 'number') {
-    numVal = valor;
-  } else if (typeof valor === 'string') {
-    const cleaned = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
-    numVal = parseFloat(cleaned);
-  } else {
-    return res.status(400).json({
-      sucesso: false,
-      erro: "Dados inválidos: Campo 'valor' obrigatório e numérico."
-    });
-  }
+    if (!apiKey || String(apiKey).trim() !== String(configuredKey).trim()) {
+      return res.status(401).json({
+        sucesso: false,
+        erro: "Chave de API inválida"
+      });
+    }
 
-  if (isNaN(numVal) || numVal <= 0) {
-    return res.status(400).json({
-      sucesso: false,
-      erro: "Dados inválidos: O campo 'valor' deve ser maior que zero."
-    });
-  }
+    // 3. Validação do corpo da requisição (JSON)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return res.status(400).json({
+          sucesso: false,
+          erro: "Dados inválidos: corpo da requisição deve ser um JSON válido."
+        });
+      }
+    }
+    body = body || {};
 
-  const valorFinal = Number(numVal.toFixed(2));
+    const { valor, categoria, mes_referencia: customMes } = body;
 
-  try {
-    // 3. Resolução do mês de referência (formato rigorosamente idêntico ao front-end: NOME/ANO)
+    // Validação de categoria
+    const canonicalCategoria = normalizeCategoria(categoria);
+    if (!canonicalCategoria) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Dados inválidos: Categoria permitida apenas 'Restaurante', 'Lazer' ou 'Conveniência'."
+      });
+    }
+
+    // Validação de valor numérico maior que zero
+    let numVal: number;
+    if (typeof valor === 'number') {
+      numVal = valor;
+    } else if (typeof valor === 'string') {
+      const cleaned = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
+      numVal = parseFloat(cleaned);
+    } else {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Dados inválidos: Campo 'valor' obrigatório e numérico."
+      });
+    }
+
+    if (isNaN(numVal) || numVal <= 0) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: "Dados inválidos: O campo 'valor' deve ser maior que zero."
+      });
+    }
+
+    const valorFinal = Number(numVal.toFixed(2));
+
+    // 4. Resolução do mês de referência
     const mesReferencia = customMes && typeof customMes === 'string' && customMes.trim()
       ? customMes.trim().toUpperCase()
       : await getActiveReferenceMonth();
@@ -155,7 +158,7 @@ export default async function handler(req: any, res: any) {
       created_at: new Date().toISOString()
     };
 
-    // 4. Gravação real no Supabase
+    // 5. Inserção no Supabase
     const { data, error } = await supabase
       .from('gastos_itens')
       .insert([payload])
@@ -170,15 +173,14 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 5. Sucesso confirmado com persistência real
+    // 6. Resposta estruturada de sucesso
     return res.status(201).json({
       sucesso: true,
       mensagem: "Gasto registrado com sucesso",
-      registro: data,
-      gasto: data
+      registro: data
     });
   } catch (err: any) {
-    console.error("Exceção não tratada no backend:", err);
+    console.error("Exceção não tratada no backend da API de gastos:", err);
     return res.status(500).json({
       sucesso: false,
       erro: err.message || "Erro interno do servidor ao processar gasto."

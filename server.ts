@@ -80,6 +80,7 @@ const normalizeCategoria = (cat: any): 'Restaurante' | 'Lazer' | 'Conveniência'
 
 // Handler para registrar gasto via API REST
 const handleRegistrarGasto = async (req: express.Request, res: express.Response) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   const apiKey = req.headers['x-api-key'] || req.headers['X-API-KEY'] || req.headers['x-api-token'];
   const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
 
@@ -156,8 +157,7 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
     return res.status(201).json({
       sucesso: true,
       mensagem: "Gasto registrado com sucesso",
-      registro: data,
-      gasto: data
+      registro: data
     });
   } catch (err: any) {
     console.error("Erro interno no endpoint de gastos:", err);
@@ -168,20 +168,32 @@ const handleRegistrarGasto = async (req: express.Request, res: express.Response)
   }
 };
 
-// Rotas da API REST
+const handleDiagnostico = async (req: express.Request, res: express.Response) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  try {
+    const mesAtivo = await getActiveReferenceMonth();
+    res.status(200).json({
+      status: "online",
+      servico: "API Gastos - Sistema Mathews e Débora",
+      metodos_permitidos: ["POST"],
+      mes_referencia_ativo: mesAtivo,
+      categorias_permitidas: ["Restaurante", "Lazer", "Conveniência"]
+    });
+  } catch {
+    res.status(200).json({
+      status: "online",
+      servico: "API Gastos - Sistema Mathews e Débora",
+      metodos_permitidos: ["POST"]
+    });
+  }
+};
+
+// Rotas da API REST (POST e GET para verificação no navegador)
+app.get('/api/gastos', handleDiagnostico);
+app.get('/api/gastos/status', handleDiagnostico);
 app.post('/api/gastos', handleRegistrarGasto);
 app.post('/api/gastos/adicionar', handleRegistrarGasto);
 
-// Rota de verificação do status da API
-app.get('/api/gastos/status', async (req, res) => {
-  const mesAtivo = await getActiveReferenceMonth();
-  res.json({
-    sucesso: true,
-    status: 'online',
-    mes_referencia_ativo: mesAtivo,
-    categorias_permitidas: ['Restaurante', 'Lazer', 'Conveniência']
-  });
-});
 
 // Setup Vite Dev Server ou Produção
 const startServer = async () => {
