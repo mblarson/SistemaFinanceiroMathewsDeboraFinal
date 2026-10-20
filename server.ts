@@ -188,7 +188,17 @@ const handleDiagnostico = async (req: express.Request, res: express.Response) =>
   }
 };
 
-// Rotas da API REST (POST e GET para verificação no navegador)
+// Rotas da API REST (OPTIONS, GET e POST)
+const handleOptions = (req: express.Request, res: express.Response) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, X-API-KEY, Authorization');
+  res.status(200).json({ sucesso: true, status: 'ok' });
+};
+
+app.options('/api/gastos', handleOptions);
+app.options('/api/gastos/adicionar', handleOptions);
 app.get('/api/gastos', handleDiagnostico);
 app.get('/api/gastos/status', handleDiagnostico);
 app.post('/api/gastos', handleRegistrarGasto);

@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
-// Prioritiza a SERVICE_ROLE_KEY para ignorar restrições de RLS no servidor
 const SUPABASE_KEY = 
   process.env.SUPABASE_SERVICE_ROLE_KEY || 
   process.env.SUPABASE_KEY || 
@@ -20,7 +19,61 @@ const MESES_NOMES = [
   "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
 ];
 
-// Helper para obter o mês ativo com exata correspondência visual do front-end
+// Helper seguro para envio de JSON independente da plataforma (Vercel, Express ou Node puro)
+function sendJson(res: any, status: number, data: any) {
+  const jsonStr = JSON.stringify(data);
+  try {
+    if (typeof res.setHeader === 'function') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, X-API-KEY, Authorization');
+    }
+    if (typeof res.status === 'function' && typeof res.json === 'function') {
+      return res.status(status).json(data);
+    }
+    if (typeof res.writeHead === 'function') {
+      res.writeHead(status, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, x-api-key, X-API-KEY, Authorization'
+      });
+      return res.end(jsonStr);
+    }
+    res.statusCode = status;
+    return res.end(jsonStr);
+  } catch (err) {
+    console.error("Falha fatal ao enviar resposta JSON:", err);
+    try {
+      res.statusCode = status;
+      res.end(jsonStr);
+    } catch {}
+  }
+}
+
+// Leitor resiliente do body da requisição
+async function getRequestBody(req: any): Promise<any> {
+  if (req.body) {
+    if (typeof req.body === 'object') return req.body;
+    if (typeof req.body === 'string') {
+      try { return JSON.parse(req.body); } catch { return {}; }
+    }
+  }
+  if (typeof req.on === 'function') {
+    return new Promise((resolve) => {
+      let data = '';
+      req.on('data', (chunk: any) => { data += chunk; });
+      req.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { resolve({}); }
+      });
+      req.on('error', () => resolve({}));
+    });
+  }
+  return {};
+}
+
+// Helper para obter o mês de referência ativo
 const getActiveReferenceMonth = async (): Promise<string> => {
   try {
     const { data: meses } = await supabase
@@ -57,21 +110,18 @@ const normalizeCategoria = (cat: any): 'Restaurante' | 'Lazer' | 'Conveniência'
 };
 
 export default async function handler(req: any, res: any) {
-  // Configuração explícita de cabeçalhos JSON e CORS em todas as respostas
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, X-API-KEY');
-
   try {
-    if (req.method === 'OPTIONS') {
-      return res.status(200).json({ status: 'ok' });
+    const method = String(req.method || 'GET').toUpperCase();
+
+    // 1. Tratamento preliminar do método OPTIONS (pre-flight CORS)
+    if (method === 'OPTIONS') {
+      return sendJson(res, 200, { sucesso: true, status: 'ok' });
     }
 
-    // 1. Método GET para diagnóstico e verificação visual no navegador
-    if (req.method === 'GET') {
+    // 2. Método GET: Diagnóstico legível no navegador
+    if (method === 'GET') {
       const mesAtivo = await getActiveReferenceMonth();
-      return res.status(200).json({
+      return sendJson(res, 200, {
         status: "online",
         servico: "API Gastos - Sistema Mathews e Débora",
         metodos_permitidos: ["POST"],
@@ -80,50 +130,38 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    if (req.method !== 'POST') {
-      return res.status(405).json({ 
-        sucesso: false, 
-        erro: "Método não permitido. Utilize POST para registrar gastos." 
+    // 3. Validação do método POST
+    if (method !== 'POST') {
+      return sendJson(res, 405, {
+        sucesso: false,
+        erro: "Método não permitido. Utilize POST para registrar gastos."
       });
     }
 
-    // 2. Validação de autenticação via header x-api-key
-    const apiKey = req.headers['x-api-key'] || req.headers['X-API-KEY'] || req.headers['x-api-token'];
+    // 4. Validação de autenticação via x-api-key
+    const headers = req.headers || {};
+    const apiKey = headers['x-api-key'] || headers['X-API-KEY'] || headers['x-api-token'];
     const configuredKey = process.env.GASTOS_API_KEY || 'md-gastos-secret-key-2026';
 
     if (!apiKey || String(apiKey).trim() !== String(configuredKey).trim()) {
-      return res.status(401).json({
+      return sendJson(res, 401, {
         sucesso: false,
         erro: "Chave de API inválida"
       });
     }
 
-    // 3. Validação do corpo da requisição (JSON)
-    let body = req.body;
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body);
-      } catch {
-        return res.status(400).json({
-          sucesso: false,
-          erro: "Dados inválidos: corpo da requisição deve ser um JSON válido."
-        });
-      }
-    }
-    body = body || {};
+    // 5. Leitura e validação dos dados
+    const body = await getRequestBody(req);
+    const { valor, categoria, mes_referencia: customMes } = body || {};
 
-    const { valor, categoria, mes_referencia: customMes } = body;
-
-    // Validação de categoria
     const canonicalCategoria = normalizeCategoria(categoria);
     if (!canonicalCategoria) {
-      return res.status(400).json({
+      return sendJson(res, 400, {
         sucesso: false,
         erro: "Dados inválidos: Categoria permitida apenas 'Restaurante', 'Lazer' ou 'Conveniência'."
       });
     }
 
-    // Validação de valor numérico maior que zero
     let numVal: number;
     if (typeof valor === 'number') {
       numVal = valor;
@@ -131,14 +169,14 @@ export default async function handler(req: any, res: any) {
       const cleaned = valor.replace(/[^\d,.-]/g, '').replace(',', '.');
       numVal = parseFloat(cleaned);
     } else {
-      return res.status(400).json({
+      return sendJson(res, 400, {
         sucesso: false,
         erro: "Dados inválidos: Campo 'valor' obrigatório e numérico."
       });
     }
 
     if (isNaN(numVal) || numVal <= 0) {
-      return res.status(400).json({
+      return sendJson(res, 400, {
         sucesso: false,
         erro: "Dados inválidos: O campo 'valor' deve ser maior que zero."
       });
@@ -146,7 +184,7 @@ export default async function handler(req: any, res: any) {
 
     const valorFinal = Number(numVal.toFixed(2));
 
-    // 4. Resolução do mês de referência
+    // 6. Resolução do mês de referência
     const mesReferencia = customMes && typeof customMes === 'string' && customMes.trim()
       ? customMes.trim().toUpperCase()
       : await getActiveReferenceMonth();
@@ -158,7 +196,7 @@ export default async function handler(req: any, res: any) {
       created_at: new Date().toISOString()
     };
 
-    // 5. Inserção no Supabase
+    // 7. Persistência real no Supabase
     const { data, error } = await supabase
       .from('gastos_itens')
       .insert([payload])
@@ -166,22 +204,22 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (error) {
-      console.error("Erro retornado pelo Supabase ao inserir gasto:", error);
-      return res.status(500).json({
+      console.error("Erro do Supabase ao inserir gasto:", error);
+      return sendJson(res, 500, {
         sucesso: false,
         erro: error.message || "Erro ao gravar registro no banco de dados Supabase."
       });
     }
 
-    // 6. Resposta estruturada de sucesso
-    return res.status(201).json({
+    // 8. Resposta de sucesso confirmada
+    return sendJson(res, 200, {
       sucesso: true,
       mensagem: "Gasto registrado com sucesso",
       registro: data
     });
   } catch (err: any) {
-    console.error("Exceção não tratada no backend da API de gastos:", err);
-    return res.status(500).json({
+    console.error("Exceção geral capturada na API de gastos:", err);
+    return sendJson(res, 500, {
       sucesso: false,
       erro: err.message || "Erro interno do servidor ao processar gasto."
     });

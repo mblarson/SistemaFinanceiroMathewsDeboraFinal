@@ -49,12 +49,12 @@ const normalizeCategoria = (cat: any): 'Restaurante' | 'Lazer' | 'Conveniência'
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-api-key, X-API-KEY'
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, x-api-key, X-API-KEY, Authorization'
 };
 
 export async function OPTIONS() {
-  return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: jsonHeaders });
+  return new Response(JSON.stringify({ sucesso: true, status: 'ok' }), { status: 200, headers: jsonHeaders });
 }
 
 export async function GET() {
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
         mensagem: "Gasto registrado com sucesso",
         registro: data
       }),
-      { status: 201, headers: jsonHeaders }
+      { status: 200, headers: jsonHeaders }
     );
   } catch (err: any) {
     return new Response(
