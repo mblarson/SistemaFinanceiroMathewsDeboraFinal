@@ -1,8 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/gastos/apple-pay", "destination": "/api/apple-pay" },
-    { "source": "/api/financeiro/despesas/apple-pay", "destination": "/api/apple-pay" },
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/gastos/apple-pay", "destination": "/api/gastos/apple-pay" },
+    { "source": "/api/financeiro/despesas/apple-pay", "destination": "/api/financeiro/despesas/apple-pay" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

@@ -26,7 +26,6 @@ function parseDateAndMonth(dataCompraStr?: string): { data: string; mesReferenci
   ];
 
   if (dataCompraStr && typeof dataCompraStr === 'string') {
-    // Tenta capturar YYYY-MM-DD no início da string
     const match = dataCompraStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (match) {
       const year = parseInt(match[1], 10);
@@ -54,45 +53,83 @@ function parseDateAndMonth(dataCompraStr?: string): { data: string; mesReferenci
   };
 }
 
-export default async function handler(req: any, res: any) {
-  // 1. Configuração completa de CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+// Helper universal e seguro para envio de respostas (compatível com Express, Vercel e Node HTTP)
+function sendJson(res: any, status: number, data: any) {
+  try {
+    if (res && typeof res.setHeader === 'function' && !res.headersSent) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    }
+  } catch (_) {}
 
-  // Pre-flight CORS (OPTIONS)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (res && typeof res.status === 'function') {
+    res.status(status);
+    if (typeof res.json === 'function') {
+      return res.json(data);
+    }
   }
-
-  // 2. Método GET (Diagnóstico operacional e Documentação da API)
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'online',
-      servico: 'Integração Apple Pay (iOS Atalhos) -> Menu GASTOS',
-      versao: '1.0.0',
-      descricao: 'Endpoint idempotente e seguro para registro de compras presenciais ou online via Apple Pay diretamente na tabela de gastos do sistema.',
-      autenticacao: {
-        tipo: 'Header',
-        opcoes: ['x-api-key: [SUA_CHAVE]', 'Authorization: Bearer [SUA_CHAVE]']
-      },
-      categorias_permitidas: CATEGORIAS_VALIDAS,
-      payload_exemplo: {
-        requestId: '550e8400-e29b-41d4-a716-446655440000',
-        origem: 'apple_pay',
-        estabelecimento: 'Outback Steakhouse',
-        valor: 89.90,
-        dataCompra: '2026-10-21T14:10:00-04:00',
-        categoria: 'restaurante'
-      },
-      idempotencia: 'Atômica garantida via coluna request_id única no banco de dados.'
+  if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+    res.writeHead(status, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*'
     });
+  } else if (res) {
+    res.statusCode = status;
   }
+  if (res && typeof res.end === 'function') {
+    return res.end(JSON.stringify(data));
+  }
+}
 
-  // 3. Método POST (Registro Seguro com Idempotência Atômica)
-  if (req.method === 'POST') {
+export default async function handler(req: any, res: any) {
+  try {
+    // 1. Configuração de CORS prévia
     try {
+      if (res && typeof res.setHeader === 'function' && !res.headersSent) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      }
+    } catch (_) {}
+
+    // Pre-flight CORS (OPTIONS)
+    if (req.method === 'OPTIONS') {
+      if (res && typeof res.status === 'function') {
+        return res.status(200).end();
+      }
+      res.statusCode = 200;
+      return res.end();
+    }
+
+    // 2. Método GET (Diagnóstico operacional e Documentação da API)
+    if (req.method === 'GET') {
+      return sendJson(res, 200, {
+        status: 'online',
+        servico: 'Integração Apple Pay (iOS Atalhos) -> Menu GASTOS',
+        versao: '1.0.0',
+        descricao: 'Endpoint idempotente e seguro para registro de compras presenciais ou online via Apple Pay diretamente na tabela de gastos do sistema.',
+        autenticacao: {
+          tipo: 'Header',
+          opcoes: ['x-api-key: [SUA_CHAVE]', 'Authorization: Bearer [SUA_CHAVE]']
+        },
+        categorias_permitidas: CATEGORIAS_VALIDAS,
+        payload_exemplo: {
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          origem: 'apple_pay',
+          estabelecimento: 'Outback Steakhouse',
+          valor: 89.90,
+          dataCompra: '2026-10-21T14:10:00-04:00',
+          categoria: 'restaurante'
+        },
+        idempotencia: 'Atômica garantida via coluna request_id única no banco de dados.'
+      });
+    }
+
+    // 3. Método POST (Registro Seguro com Idempotência Atômica)
+    if (req.method === 'POST') {
       // 3.1 Autenticação via cabeçalho HTTP
       const rawHeaders = req.headers || {};
       const authHeader = (rawHeaders['authorization'] || rawHeaders['Authorization'] || '').trim();
@@ -110,11 +147,11 @@ export default async function handler(req: any, res: any) {
         process.env.APPLE_PAY_API_KEY ||
         process.env.GASTOS_API_KEY ||
         process.env.API_SECRET_KEY ||
-        'md-gastos-secret-key'
+        'gastosmd'
       ).trim();
 
       if (!receivedKey || receivedKey !== expectedKey) {
-        return res.status(401).json({
+        return sendJson(res, 401, {
           success: false,
           sucesso: false,
           error: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.',
@@ -130,7 +167,7 @@ export default async function handler(req: any, res: any) {
         try {
           body = JSON.parse(body);
         } catch {
-          return res.status(400).json({
+          return sendJson(res, 400, {
             success: false,
             sucesso: false,
             error: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.',
@@ -156,7 +193,7 @@ export default async function handler(req: any, res: any) {
         : Number(valor);
 
       if (isNaN(parsedValor) || parsedValor <= 0) {
-        return res.status(400).json({
+        return sendJson(res, 400, {
           success: false,
           sucesso: false,
           error: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.',
@@ -170,7 +207,7 @@ export default async function handler(req: any, res: any) {
       // 3.4 Validação e Normalização da Categoria (Restaurante, Lazer ou Conveniência)
       const categoriaCanon = normalizarCategoria(categoria);
       if (!categoriaCanon) {
-        return res.status(400).json({
+        return sendJson(res, 400, {
           success: false,
           sucesso: false,
           error: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`,
@@ -196,7 +233,7 @@ export default async function handler(req: any, res: any) {
       try {
         supabase = createClient(supabaseUrl, supabaseKey);
       } catch (clientErr: any) {
-        return res.status(500).json({
+        return sendJson(res, 500, {
           success: false,
           sucesso: false,
           error: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr),
@@ -222,7 +259,7 @@ export default async function handler(req: any, res: any) {
           console.warn('Aviso ao consultar request_id para idempotência:', searchError.message);
         } else if (existing) {
           // Retorna registro previamente cadastrado sem duplicar
-          return res.status(200).json({
+          return sendJson(res, 200, {
             success: true,
             sucesso: true,
             idempotente: true,
@@ -264,7 +301,7 @@ export default async function handler(req: any, res: any) {
             .maybeSingle();
 
           if (existingRace) {
-            return res.status(200).json({
+            return sendJson(res, 200, {
               success: true,
               sucesso: true,
               idempotente: true,
@@ -275,7 +312,7 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        return res.status(500).json({
+        return sendJson(res, 500, {
           success: false,
           sucesso: false,
           error: 'Erro ao gravar transação Apple Pay no banco de dados: ' + insertError.message,
@@ -287,7 +324,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // 3.11 Retorno 201 Created com sucesso
-      return res.status(201).json({
+      return sendJson(res, 201, {
         success: true,
         sucesso: true,
         idempotente: false,
@@ -295,25 +332,25 @@ export default async function handler(req: any, res: any) {
         mensagem: 'Gasto via Apple Pay registrado com sucesso no menu GASTOS.',
         registro: insertData
       });
-    } catch (globalErr: any) {
-      return res.status(500).json({
-        success: false,
-        sucesso: false,
-        error: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
-        erro: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
-        message: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
-        mensagem: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr)
-      });
     }
-  }
 
-  // 4. Métodos não suportados
-  return res.status(405).json({
-    success: false,
-    sucesso: false,
-    error: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
-    erro: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
-    message: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
-    mensagem: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`
-  });
+    // 4. Métodos não suportados
+    return sendJson(res, 405, {
+      success: false,
+      sucesso: false,
+      error: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+      erro: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+      message: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+      mensagem: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`
+    });
+  } catch (fatalErr: any) {
+    return sendJson(res, 500, {
+      success: false,
+      sucesso: false,
+      error: 'Erro interno ao processar requisição: ' + (fatalErr?.message || fatalErr),
+      erro: 'Erro interno ao processar requisição: ' + (fatalErr?.message || fatalErr),
+      message: 'Erro interno ao processar requisição: ' + (fatalErr?.message || fatalErr),
+      mensagem: 'Erro interno ao processar requisição: ' + (fatalErr?.message || fatalErr)
+    });
+  }
 }
