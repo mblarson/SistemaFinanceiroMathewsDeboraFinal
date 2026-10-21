@@ -226,9 +226,9 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       {currentMonth.status === 'ativo' && (
-        <div className="bg-gray-900 p-8 sm:p-12 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
+        <div className="bg-gray-900 p-8 sm:p-12 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl lg:rounded-3xl lg:bg-gradient-to-br lg:from-gray-900 lg:via-gray-850 lg:to-gray-950 lg:shadow-xl lg:shadow-gray-900/20 lg:border lg:border-white/10">
           <div className="flex items-center gap-6 text-white">
-            <div className="bg-white/10 p-5 rounded-3xl backdrop-blur-sm border border-white/5">
+            <div className="bg-white/10 p-5 rounded-3xl backdrop-blur-sm border border-white/5 lg:rounded-2xl lg:shadow-xs">
               <LockKeyhole size={32} />
             </div>
             <div>
@@ -238,14 +238,14 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
           </div>
           <button 
             onClick={closeMonthRoutine}
-            className="w-full md:w-auto bg-white text-gray-900 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition shadow-xl active:scale-95"
+            className="w-full md:w-auto bg-white text-gray-900 px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition shadow-xl active:scale-95 lg:rounded-2xl lg:shadow-md lg:hover:shadow-lg lg:hover:-translate-y-0.5"
           >
             Fechar Mês Agora
           </button>
         </div>
       )}
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8 lg:p-12">
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8 lg:p-12 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70">
         <h3 className="text-xl font-black mb-10 flex items-center gap-3 text-gray-800">
           <Calendar className="text-gray-400" size={24} />
           ARQUIVO MENSAL
@@ -261,7 +261,7 @@ const Closing: React.FC<ClosingProps> = ({ currentMonth, onSelectMonth, onRefres
             {months.map(m => (
               <div 
                 key={m.id} 
-                className={`p-6 rounded-[1.8rem] border flex items-center justify-between transition-all group ${
+                className={`p-6 rounded-[1.8rem] border flex items-center justify-between transition-all group lg:rounded-2xl lg:shadow-sm lg:hover:shadow-md lg:hover:-translate-y-0.5 ${
                   m.status === 'ativo' ? 'bg-green-50/20 border-green-100' :
                   m.status === 'provisionamento' ? 'bg-blue-50/20 border-blue-100' :
                   'bg-gray-50/30 border-gray-100 hover:border-gray-200'

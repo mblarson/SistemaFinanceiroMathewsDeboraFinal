@@ -59,7 +59,7 @@ const CompactChart: React.FC<{
   const isGreen = colorTheme === 'green';
 
   return (
-    <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+    <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300">
       <div>
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
@@ -293,7 +293,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+        <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden lg:rounded-3xl lg:bg-gradient-to-br lg:from-gray-900 lg:via-gray-850 lg:to-gray-950 lg:shadow-xl lg:shadow-gray-900/20 lg:border lg:border-white/10 lg:hover:shadow-2xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
           <div className="absolute -right-4 -top-4 bg-white/5 p-10 rounded-full"></div>
           <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
             <Wallet size={12} className="text-green-500" /> Saldo Real (Líquido)
@@ -302,9 +302,9 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           <p className="mt-2 text-[9px] text-white/30 uppercase font-bold tracking-wider">Cálculo Contábil (Indep. de Parcelas)</p>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-emerald-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
           <div className="flex justify-between items-start">
-            <div className="bg-green-50 p-2 rounded-xl text-green-600 border border-green-100">
+            <div className="bg-green-50 p-2 rounded-xl text-green-600 border border-green-100 lg:rounded-2xl lg:shadow-xs">
               <TrendingUp size={18} />
             </div>
           </div>
@@ -314,9 +314,9 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-rose-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
           <div className="flex justify-between items-start">
-            <div className="bg-red-50 p-2 rounded-xl text-red-600 border border-red-100">
+            <div className="bg-red-50 p-2 rounded-xl text-red-600 border border-red-100 lg:rounded-2xl lg:shadow-xs">
               <TrendingDown size={18} />
             </div>
           </div>
@@ -346,7 +346,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300">
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
               <History className="text-gray-400" size={16} />
@@ -355,7 +355,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </div>
           <div className="space-y-2">
             {recentTransactions.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50">
+              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50 lg:rounded-2xl lg:hover:bg-gray-50 lg:transition-all">
                 <div className="flex items-center gap-3">
                   <div className={`p-1.5 rounded-lg ${item.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {item.type === 'revenue' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
@@ -375,7 +375,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
 
         <div 
           onClick={() => setShowCardsModal(true)}
-          className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col cursor-pointer hover:border-blue-200 transition-all group"
+          className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col cursor-pointer hover:border-blue-200 transition-all group lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300"
         >
           <div className="flex justify-between items-center mb-5">
             <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
@@ -385,7 +385,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
           </div>
           <div className="space-y-4">
-            <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center">
+            <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center lg:rounded-2xl lg:bg-gradient-to-br lg:from-gray-50 lg:to-gray-100/60 lg:border-gray-200/50 lg:shadow-inner">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gasto em Faturas</p>
               <h2 className="text-2xl font-black text-gray-900">{formatCurrency(totals.cards)}</h2>
               
@@ -402,7 +402,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             </div>
             <button 
               onClick={(e) => { e.stopPropagation(); refresh(); }}
-              className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest"
+              className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest lg:rounded-2xl lg:shadow-md lg:shadow-gray-900/20 lg:hover:shadow-lg lg:hover:-translate-y-0.5"
             >
               Sincronizar Banco
             </button>

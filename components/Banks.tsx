@@ -255,7 +255,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
           <ArrowLeft size={18} /> Voltar
         </button>
 
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-6 lg:p-10">
+        <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-6 lg:p-10 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-gray-200" style={{ backgroundColor: selectedBank.cor, color: selectedBank.nome === 'BB' ? '#003366' : 'white' }}>
@@ -403,7 +403,7 @@ const Banks: React.FC<BanksProps> = ({ currentMonth, triggerAdd }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {banks.map(bank => (
             <div key={bank.id} className="relative group">
-              <div onClick={() => setSelectedBank(bank)} className="w-full bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 relative overflow-hidden">
+              <div onClick={() => setSelectedBank(bank)} className="w-full bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 relative overflow-hidden lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-xl lg:hover:-translate-y-1">
                 <div className="absolute top-0 right-0 w-32 h-32 -mr-10 -mt-10 rounded-full opacity-5" style={{ backgroundColor: bank.cor }}></div>
                 <div className="w-16 h-16 rounded-[1.2rem] flex items-center justify-center mb-8 shadow-lg" style={{ backgroundColor: bank.cor, color: bank.nome === 'BB' ? '#003366' : 'white' }}><Banknote size={32} /></div>
                 <div className="flex justify-between items-end relative z-10">

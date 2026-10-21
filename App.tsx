@@ -13,11 +13,13 @@ import {
   Plus,
   Clock,
   CalendarDays,
-  Calculator as CalcIcon
+  Calculator as CalcIcon,
+  ShoppingBag
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
 import Overview from './components/Overview';
+import Gastos from './components/Gastos';
 import Expenses from './components/Expenses';
 import Revenue from './components/Revenue';
 import Banks from './components/Banks';
@@ -91,6 +93,7 @@ const App: React.FC = () => {
 
   const viewNames: Record<string, string> = {
     overview: 'Dashboard',
+    gastos: 'Gastos',
     expenses: 'Despesas',
     revenue: 'Receitas',
     banks: 'Cartões',
@@ -103,6 +106,8 @@ const App: React.FC = () => {
     init();
     if (window.location.pathname === '/calculadora') {
       setView('calculator');
+    } else if (window.location.pathname === '/gastos') {
+      setView('gastos');
     }
   }, []);
 
@@ -248,7 +253,7 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
     
     // Atualiza a URL para suporte básico a rotas (opcional, mas solicitado pelo usuário)
-    const path = newView === 'calculator' ? '/calculadora' : '/';
+    const path = newView === 'calculator' ? '/calculadora' : newView === 'gastos' ? '/gastos' : '/';
     window.history.pushState({}, '', path);
   };
 
@@ -281,7 +286,7 @@ const App: React.FC = () => {
     );
   }
 
-  const showAddAction = ['expenses', 'revenue', 'installments', 'banks'].includes(view);
+  const showAddAction = ['expenses', 'revenue', 'installments', 'banks', 'gastos'].includes(view);
   const canEdit = currentContextMonth.status !== 'fechado';
 
   return (
@@ -290,11 +295,11 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-30 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
       {/* Navegação Lateral */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-full lg:w-72 bg-gray-900 border-r border-gray-950 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-6 lg:p-8 overflow-y-auto no-scrollbar">
-          <div className="flex items-center justify-between lg:justify-start gap-4 mb-8 lg:mb-12">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-full lg:w-72 bg-gray-900 border-r border-gray-950 lg:border-r-0 lg:shadow-[4px_0_24px_rgba(0,0,0,0.18)] transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex flex-col h-full p-6 lg:pt-8 lg:pb-8 lg:pl-6 lg:pr-0 overflow-y-auto overflow-x-hidden no-scrollbar">
+          <div className="flex items-center justify-between lg:justify-start gap-4 mb-8 lg:mb-12 lg:pr-6">
             <div className="flex items-center gap-4">
-              <div className="bg-white text-gray-900 p-3 rounded-[1.2rem] shadow-xl">
+              <div className="bg-white text-gray-900 p-3 rounded-[1.2rem] lg:rounded-2xl shadow-xl lg:shadow-lg lg:border lg:border-white/20">
                 <Wallet size={24} />
               </div>
               <div>
@@ -310,16 +315,17 @@ const App: React.FC = () => {
 
           <nav className="flex-1 space-y-8">
             <div>
-              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3">Principal</p>
+              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3 lg:pr-6">Principal</p>
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
                 <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={view === 'overview'} onClick={() => handleNavigate('overview')} />
+                <NavItem icon={<ShoppingBag size={20} />} label="Gastos" active={view === 'gastos'} onClick={() => handleNavigate('gastos')} />
                 <NavItem icon={<Receipt size={20} />} label="Despesas" active={view === 'expenses'} onClick={() => handleNavigate('expenses')} />
                 <NavItem icon={<TrendingUp size={20} />} label="Receitas" active={view === 'revenue'} onClick={() => handleNavigate('revenue')} />
               </div>
             </div>
             
             <div>
-              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3">Gestão</p>
+              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3 lg:pr-6">Gestão</p>
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
                 <NavItem icon={<Banknote size={20} />} label="Cartões" active={view === 'banks'} onClick={() => handleNavigate('banks')} />
                 <NavItem icon={<CalendarClock size={20} />} label="Parcelas" active={view === 'installments'} onClick={() => handleNavigate('installments')} />
@@ -327,7 +333,7 @@ const App: React.FC = () => {
             </div>
             
             <div>
-              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3">Extras</p>
+              <p className="text-[10px] font-black text-gray-400/60 uppercase tracking-[0.2em] mb-4 ml-3 lg:pr-6">Extras</p>
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
                 <NavItem icon={<Clock size={20} />} label="Arquivo" active={view === 'closing'} onClick={() => handleNavigate('closing')} />
                 <NavItem icon={<CalcIcon size={20} />} label="Calculadora" active={view === 'calculator'} onClick={() => handleNavigate('calculator')} />
@@ -340,17 +346,17 @@ const App: React.FC = () => {
       {/* Área Principal */}
       <main className="flex-1 overflow-y-auto relative no-scrollbar">
         {/* HEADER LINHA DO TEMPO */}
-        <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 px-6 py-4 lg:px-12 lg:py-6">
+        <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 py-4 lg:px-12 lg:py-6">
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
             
             {/* Context Switcher (Timeline Header) */}
-            <div className="w-full sm:flex-1 flex items-center justify-between gap-2 bg-gray-100/50 p-2 rounded-[2rem] border border-gray-200/50">
+            <div className="w-full sm:flex-1 flex items-center justify-between gap-2 bg-gray-100/50 p-2 rounded-[2rem] lg:rounded-3xl border border-gray-200/50 lg:border-gray-200/80 lg:shadow-inner">
               {activeMonth && (
                 <button 
                   onClick={() => handleContextChange(activeMonth)}
-                  className={`flex flex-col items-center justify-center min-w-[140px] px-6 py-2.5 rounded-[1.5rem] transition-all duration-300 ${
+                  className={`flex flex-col items-center justify-center min-w-[140px] px-6 py-2.5 rounded-[1.5rem] lg:rounded-2xl transition-all duration-300 ${
                     currentContextMonth.id === activeMonth.id 
-                    ? 'bg-white shadow-xl shadow-gray-200 border border-green-100' 
+                    ? 'bg-white shadow-xl shadow-gray-200 border border-green-100 lg:shadow-md lg:shadow-green-900/5 lg:border-green-200/60' 
                     : 'opacity-40 hover:opacity-100 hover:bg-white/50'
                   }`}
                 >
@@ -367,9 +373,9 @@ const App: React.FC = () => {
               {provisionMonth ? (
                 <button 
                   onClick={() => handleContextChange(provisionMonth)}
-                  className={`flex flex-col items-center justify-center min-w-[140px] px-6 py-2.5 rounded-[1.5rem] transition-all duration-300 ${
+                  className={`flex flex-col items-center justify-center min-w-[140px] px-6 py-2.5 rounded-[1.5rem] lg:rounded-2xl transition-all duration-300 ${
                     currentContextMonth.id === provisionMonth.id 
-                    ? 'bg-white shadow-xl shadow-gray-200 border border-blue-100' 
+                    ? 'bg-white shadow-xl shadow-gray-200 border border-blue-100 lg:shadow-md lg:shadow-blue-900/5 lg:border-blue-200/60' 
                     : 'opacity-40 hover:opacity-100 hover:bg-white/50'
                   }`}
                 >
@@ -409,7 +415,7 @@ const App: React.FC = () => {
               {showAddAction && canEdit && (
                 <button 
                   onClick={onAddClick}
-                  className={`p-3.5 lg:p-4 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all ${
+                  className={`p-3.5 lg:p-4 rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all lg:rounded-2xl lg:shadow-md lg:shadow-gray-900/20 lg:hover:shadow-lg lg:hover:-translate-y-0.5 ${
                      currentContextMonth.id === -1 ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-gray-900 text-white'
                   }`}
                   title={currentContextMonth.id === -1 ? "Indisponível em modo visualização" : "Novo Lançamento"}
@@ -420,7 +426,7 @@ const App: React.FC = () => {
               )}
               <button 
                 onClick={handleGlobalRefresh}
-                className="p-3.5 lg:p-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-900 transition-all shadow-sm active:scale-95"
+                className="p-3.5 lg:p-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-900 transition-all shadow-sm active:scale-95 lg:rounded-2xl lg:shadow-sm lg:hover:shadow-md lg:hover:-translate-y-0.5"
               >
                 <RefreshCw size={18} className="lg:w-[22px] lg:h-[22px]" />
               </button>
@@ -441,7 +447,7 @@ const App: React.FC = () => {
 
           {/* Alerta de Mês Fechado ou Virtual */}
           {currentContextMonth.status === 'fechado' && (
-            <div className="mb-10 bg-amber-50 border border-amber-200/50 p-6 rounded-[2rem] flex items-center gap-4 text-amber-800 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="mb-10 bg-amber-50 border border-amber-200/50 p-6 rounded-[2rem] lg:rounded-3xl flex items-center gap-4 text-amber-800 shadow-sm animate-in fade-in slide-in-from-top-4">
               <div className="bg-amber-100 p-3 rounded-2xl"><LockKeyhole size={24} /></div>
               <div>
                 <p className="text-sm font-black uppercase tracking-tighter">Histórico (Modo Leitura)</p>
@@ -451,7 +457,7 @@ const App: React.FC = () => {
           )}
 
           {currentContextMonth.id === -1 && (
-             <div className="mb-10 bg-red-50 border border-red-200/50 p-6 rounded-[2rem] flex items-center gap-4 text-red-800 shadow-sm animate-in fade-in slide-in-from-top-4">
+             <div className="mb-10 bg-red-50 border border-red-200/50 p-6 rounded-[2rem] lg:rounded-3xl flex items-center gap-4 text-red-800 shadow-sm animate-in fade-in slide-in-from-top-4">
                <div className="bg-red-100 p-3 rounded-2xl"><LockKeyhole size={24} /></div>
                <div>
                  <p className="text-sm font-black uppercase tracking-tighter">Modo de Visualização (Sem Persistência)</p>
@@ -462,6 +468,7 @@ const App: React.FC = () => {
 
           {/* Renderização Condicional com Reset de State via Key */}
           {view === 'overview' && <Overview key={`ov-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} refresh={handleGlobalRefresh} />}
+          {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
@@ -482,17 +489,32 @@ interface NavItemProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex flex-col lg:flex-row items-center lg:items-center lg:gap-4 px-4 py-4 lg:px-6 lg:py-5 rounded-2xl transition-all duration-500 font-bold ${
-      active 
-        ? 'bg-white text-gray-900 shadow-xl shadow-gray-950/40' 
-        : 'text-white hover:bg-white/10 hover:text-white'
-    }`}
-  >
-    <span className={`${active ? 'text-gray-900' : 'text-white'} mb-2 lg:mb-0`}>{icon}</span>
-    <span className="uppercase tracking-widest text-[8px] lg:text-xs font-black text-center lg:text-left">{label}</span>
-  </button>
+  <div className="relative">
+    <button 
+      onClick={onClick}
+      className={`w-full flex flex-col lg:flex-row items-center lg:items-center lg:gap-4 px-4 py-4 lg:px-6 lg:py-4 rounded-2xl transition-all duration-300 font-bold ${
+        active 
+          ? 'bg-white text-gray-900 shadow-xl shadow-gray-950/40 lg:bg-[#F8F9FA] lg:text-gray-900 lg:shadow-none lg:rounded-l-2xl lg:rounded-r-none lg:mr-0' 
+          : 'text-white hover:bg-white/10 hover:text-white lg:text-gray-400 lg:hover:text-white lg:hover:bg-white/5 lg:mr-6 lg:rounded-2xl'
+      }`}
+    >
+      <span className={`${active ? 'text-gray-900' : 'text-white lg:text-gray-400 lg:group-hover:text-white'} mb-2 lg:mb-0 transition-colors`}>{icon}</span>
+      <span className="uppercase tracking-widest text-[8px] lg:text-xs font-black text-center lg:text-left">{label}</span>
+    </button>
+    {/* Efeito de fusão visual com a tela de conteúdo (curvas côncavas) - Exclusivo Desktop */}
+    {active && (
+      <>
+        {/* Curva côncava superior */}
+        <svg className="hidden lg:block absolute -top-4 right-0 w-4 h-4 text-[#F8F9FA] pointer-events-none z-10" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M16 0 A 16 16 0 0 0 0 16 L 16 16 Z" />
+        </svg>
+        {/* Curva côncava inferior */}
+        <svg className="hidden lg:block absolute -bottom-4 right-0 w-4 h-4 text-[#F8F9FA] pointer-events-none z-10" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M16 16 A 16 16 0 0 0 0 0 L 16 0 Z" />
+        </svg>
+      </>
+    )}
+  </div>
 );
 
 export default App;

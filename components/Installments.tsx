@@ -630,9 +630,9 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {/* Total Geral de Parcelas */}
-            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
               <div className="flex items-center gap-3.5">
-                <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0">
+                <div className="bg-emerald-50 p-3 rounded-2xl text-emerald-600 shrink-0 lg:rounded-2xl lg:shadow-xs">
                   <CalendarClock size={24} />
                 </div>
                 <div>
@@ -643,9 +643,9 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
             </div>
 
             {/* Parcelas acabando esse mês */}
-            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+            <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between gap-4 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
               <div className="flex items-center gap-3.5">
-                <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 shrink-0">
+                <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 shrink-0 lg:rounded-2xl lg:shadow-xs">
                   <CalendarClock size={24} />
                 </div>
                 <div>
@@ -656,12 +656,12 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
             </div>
 
             {/* Ações: Projetar e Parcelas por Banco */}
-            <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center gap-2">
+            <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center gap-2 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70">
               {canEdit ? (
                 <button 
                   onClick={handleStartProjection}
                   disabled={projecting}
-                  className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0"
+                  className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0 lg:rounded-2xl lg:shadow-md lg:hover:shadow-lg lg:hover:-translate-y-0.5"
                 >
                   <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
                   {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
@@ -674,7 +674,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
               <button 
                 onClick={() => setShowBankSummaryModal(true)}
-                className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-emerald-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-800 active:scale-95 transition-all shadow-md cursor-pointer shrink-0"
+                className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-emerald-700 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-800 active:scale-95 transition-all shadow-md cursor-pointer shrink-0 lg:rounded-2xl lg:shadow-md lg:hover:shadow-lg lg:hover:-translate-y-0.5"
               >
                 <CreditCard size={14} />
                 Parcelas por Banco
@@ -684,7 +684,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {installments.length === 0 ? (
-            <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
+            <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 lg:rounded-3xl lg:shadow-sm">
               <CalendarClock size={32} className="mb-2 opacity-20" />
               <p className="font-bold uppercase tracking-widest text-[10px]">Sem parcelamentos para {currentMonth.nome}</p>
             </div>
@@ -708,7 +708,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
               return (
                 <div 
                   key={item.id} 
-                  className={`bg-white rounded-3xl p-5 flex flex-col transition-all relative ${
+                  className={`bg-white rounded-3xl p-5 flex flex-col transition-all relative lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:hover:shadow-xl lg:hover:-translate-y-0.5 ${
                     isLast 
                       ? 'ring-2 ring-blue-500 ring-offset-2 animate-border-glow shadow-[0_0_15px_rgba(59,130,246,0.22)]' 
                       : 'shadow-sm'

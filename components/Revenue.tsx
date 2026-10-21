@@ -124,12 +124,12 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {!loading && revenues.length > 0 && (
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-emerald-50/30 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total de Receitas</p>
             <h2 className="text-2xl font-black text-green-700 tracking-tight">{formatCurrency(totalRevenue)}</h2>
           </div>
-          <div className="bg-green-50 p-3 rounded-2xl text-green-600">
+          <div className="bg-green-50 p-3 rounded-2xl text-green-600 lg:rounded-2xl lg:shadow-xs">
             <TrendingUp size={24} />
           </div>
         </div>
@@ -146,7 +146,7 @@ const Revenue: React.FC<RevenueProps> = ({ currentMonth, triggerAdd }) => {
             <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sem receitas lançadas.</p>
           ) : (
             revenues.map(rev => (
-              <div key={rev.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex flex-col hover:border-green-200 transition-all shadow-sm">
+              <div key={rev.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex flex-col hover:border-green-200 transition-all shadow-sm lg:rounded-3xl lg:p-5 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-xl lg:hover:-translate-y-0.5">
                 <div className="flex justify-between items-start mb-3">
                   <div className="min-w-0">
                     <h4 className="font-bold text-gray-800 text-sm truncate leading-tight">{rev.descricao}</h4>

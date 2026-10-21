@@ -631,32 +631,32 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
         {!loading && (
           <div className={`grid ${activeTab === 'pix' ? 'grid-cols-3' : 'grid-cols-2'} gap-2 w-full sm:w-auto`}>
             {activeTab === 'pix' && (
-              <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+              <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
                 <div>
                   <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 text-blue-600">Taxas Pagas</p>
                   <p className="text-sm sm:text-base font-black text-blue-700 leading-none">{formatCurrency(totalPixFeesPaid)}</p>
                 </div>
-                <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+                <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-blue-50 text-blue-600 shrink-0 lg:rounded-2xl lg:shadow-xs">
                   <TrendingUp size={14} className="sm:w-4 sm:h-4" />
                 </div>
               </div>
             )}
-            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
               <div>
                 <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total da Tela</p>
                 <p className="text-sm sm:text-base font-black text-gray-900 leading-none">{formatCurrency(currentTotal)}</p>
               </div>
-              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-gray-50 text-gray-400 shrink-0">
+              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-gray-50 text-gray-400 shrink-0 lg:rounded-2xl lg:shadow-xs">
                 <Receipt size={14} className="sm:w-4 sm:h-4" />
               </div>
             </div>
 
-            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3">
+            <div className="bg-white px-3 py-3 sm:px-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between sm:justify-start gap-2 sm:gap-3 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all">
               <div>
                 <p className="text-[7px] sm:text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total em Aberto</p>
                 <p className="text-sm sm:text-base font-black text-red-600 leading-none">{formatCurrency(currentTotalAberto)}</p>
               </div>
-              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-red-50 text-red-600 shrink-0">
+              <div className="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-red-50 text-red-600 shrink-0 lg:rounded-2xl lg:shadow-xs">
                 <Zap size={14} className="sm:w-4 sm:h-4" />
               </div>
             </div>
@@ -678,7 +678,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
               return (
                 <div 
                   key={exp.id} 
-                  className={`p-4 rounded-2xl border transition-all shadow-sm relative ${
+                  className={`p-4 rounded-2xl border transition-all shadow-sm relative lg:rounded-3xl lg:p-5 lg:shadow-md lg:shadow-gray-200/50 lg:hover:shadow-xl lg:hover:-translate-y-0.5 ${
                     exp.pago ? 'opacity-50 bg-gray-50' : 'bg-white'
                   } ${
                     isReplicated 
@@ -749,7 +749,7 @@ const Expenses: React.FC<ExpensesProps> = ({ currentMonth, triggerAdd }) => {
               return (
                 <div 
                   key={exp.id} 
-                  className={`p-4 rounded-2xl border transition-all shadow-sm relative ${
+                  className={`p-4 rounded-2xl border transition-all shadow-sm relative lg:rounded-3xl lg:p-5 lg:shadow-md lg:shadow-gray-200/50 lg:hover:shadow-xl lg:hover:-translate-y-0.5 ${
                     exp.pago ? 'opacity-50 bg-gray-50' : 'bg-white'
                   } ${
                     isReplicated 
