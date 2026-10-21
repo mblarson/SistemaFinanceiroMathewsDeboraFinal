@@ -115,8 +115,12 @@ export default async function handler(req: any, res: any) {
 
       if (!receivedKey || receivedKey !== expectedKey) {
         return res.status(401).json({
+          success: false,
           sucesso: false,
-          erro: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.'
+          error: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.',
+          erro: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.',
+          message: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.',
+          mensagem: 'Não autorizado. Forneça uma chave de API válida no cabeçalho x-api-key ou Authorization: Bearer.'
         });
       }
 
@@ -127,8 +131,12 @@ export default async function handler(req: any, res: any) {
           body = JSON.parse(body);
         } catch {
           return res.status(400).json({
+            success: false,
             sucesso: false,
-            erro: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.'
+            error: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.',
+            erro: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.',
+            message: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.',
+            mensagem: 'Corpo da requisição inválido. Certifique-se de enviar um JSON válido.'
           });
         }
       }
@@ -149,8 +157,12 @@ export default async function handler(req: any, res: any) {
 
       if (isNaN(parsedValor) || parsedValor <= 0) {
         return res.status(400).json({
+          success: false,
           sucesso: false,
-          erro: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.'
+          error: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.',
+          erro: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.',
+          message: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.',
+          mensagem: 'Valor inválido. O campo "valor" deve ser um número positivo maior que zero.'
         });
       }
       const valorSanitizado = Number(parsedValor.toFixed(2));
@@ -159,8 +171,12 @@ export default async function handler(req: any, res: any) {
       const categoriaCanon = normalizarCategoria(categoria);
       if (!categoriaCanon) {
         return res.status(400).json({
+          success: false,
           sucesso: false,
-          erro: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`
+          error: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`,
+          erro: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`,
+          message: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`,
+          mensagem: `Categoria inválida: "${categoria}". As categorias permitidas são: ${CATEGORIAS_VALIDAS.join(', ')}.`
         });
       }
 
@@ -181,8 +197,12 @@ export default async function handler(req: any, res: any) {
         supabase = createClient(supabaseUrl, supabaseKey);
       } catch (clientErr: any) {
         return res.status(500).json({
+          success: false,
           sucesso: false,
-          erro: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr)
+          error: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr),
+          erro: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr),
+          message: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr),
+          mensagem: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr)
         });
       }
 
@@ -203,8 +223,10 @@ export default async function handler(req: any, res: any) {
         } else if (existing) {
           // Retorna registro previamente cadastrado sem duplicar
           return res.status(200).json({
+            success: true,
             sucesso: true,
             idempotente: true,
+            message: 'Transação já processada anteriormente (idempotência garantida).',
             mensagem: 'Transação já processada anteriormente (idempotência garantida).',
             registro: existing
           });
@@ -243,8 +265,10 @@ export default async function handler(req: any, res: any) {
 
           if (existingRace) {
             return res.status(200).json({
+              success: true,
               sucesso: true,
               idempotente: true,
+              message: 'Transação concorrente já registrada (idempotência garantida).',
               mensagem: 'Transação concorrente já registrada (idempotência garantida).',
               registro: existingRace
             });
@@ -252,30 +276,44 @@ export default async function handler(req: any, res: any) {
         }
 
         return res.status(500).json({
+          success: false,
           sucesso: false,
+          error: 'Erro ao gravar transação Apple Pay no banco de dados: ' + insertError.message,
           erro: 'Erro ao gravar transação Apple Pay no banco de dados: ' + insertError.message,
+          message: 'Erro ao gravar transação Apple Pay no banco de dados: ' + insertError.message,
+          mensagem: 'Erro ao gravar transação Apple Pay no banco de dados: ' + insertError.message,
           detalhes: insertError.details || null
         });
       }
 
       // 3.11 Retorno 201 Created com sucesso
       return res.status(201).json({
+        success: true,
         sucesso: true,
         idempotente: false,
+        message: 'Gasto via Apple Pay registrado com sucesso no menu GASTOS.',
         mensagem: 'Gasto via Apple Pay registrado com sucesso no menu GASTOS.',
         registro: insertData
       });
     } catch (globalErr: any) {
       return res.status(500).json({
+        success: false,
         sucesso: false,
-        erro: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr)
+        error: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
+        erro: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
+        message: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr),
+        mensagem: 'Erro interno ao processar requisição Apple Pay: ' + (globalErr.message || globalErr)
       });
     }
   }
 
   // 4. Métodos não suportados
   return res.status(405).json({
+    success: false,
     sucesso: false,
-    erro: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`
+    error: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+    erro: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+    message: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`,
+    mensagem: `Método ${req.method} não permitido. Utilize GET para documentação ou POST para envio de transações.`
   });
 }
