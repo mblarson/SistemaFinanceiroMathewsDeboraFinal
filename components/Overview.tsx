@@ -552,7 +552,7 @@ const Overview: React.FC<OverviewProps> = ({
           <div className="flex-1 pb-24 no-scrollbar">
             
             {/* Top Elegant Gradient Header Section */}
-            <div className="bg-gradient-to-br from-[#162032] via-[#101726] to-[#0a0f1d] border-b border-cyan-500/10 shadow-2xl text-white pt-[max(2.5rem,env(safe-area-inset-top,20px))] pb-16 px-6 rounded-b-[36px] relative overflow-hidden before:absolute before:top-0 before:left-1/4 before:w-1/2 before:h-28 before:bg-cyan-500/10 before:blur-3xl before:pointer-events-none">
+            <div className="bg-gradient-to-br from-[#162032] via-[#101726] to-[#0a0f1d] border-b border-cyan-500/10 shadow-2xl text-white pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-16 px-6 rounded-b-[36px] relative overflow-hidden before:absolute before:top-0 before:left-1/4 before:w-1/2 before:h-28 before:bg-cyan-500/10 before:blur-3xl before:pointer-events-none">
               
               {/* User Profile & Top Action Icons */}
               <div className="flex justify-between items-center mb-6 relative z-10">
