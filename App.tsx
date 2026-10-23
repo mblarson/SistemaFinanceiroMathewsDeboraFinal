@@ -240,7 +240,7 @@ const App: React.FC = () => {
   const canEdit = currentContextMonth.status !== 'fechado';
 
   return (
-    <div className="flex h-screen bg-[#F8F9FA] overflow-hidden text-gray-900">
+    <div className={`flex h-screen ${view === 'overview' ? 'bg-[#101726] md:bg-[#F8F9FA]' : 'bg-[#F8F9FA]'} overflow-hidden text-gray-900`}>
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-md z-30 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
@@ -294,7 +294,7 @@ const App: React.FC = () => {
       </aside>
 
       {/* Área Principal */}
-      <main className="flex-1 overflow-y-auto relative no-scrollbar">
+      <main className={`flex-1 overflow-y-auto relative no-scrollbar ${view === 'overview' ? 'bg-[#101726] md:bg-transparent' : ''}`}>
         {/* HEADER LINHA DO TEMPO (Visível no topo para todas as telas, exceto no Dashboard Mobile que possui header próprio) */}
         <div className={`${view === 'overview' ? 'hidden md:block' : 'block'} sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 pt-[calc(env(safe-area-inset-top,24px)+1rem)] pb-4 md:py-4 lg:px-12 lg:py-6`}>
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">

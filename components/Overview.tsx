@@ -549,18 +549,18 @@ const Overview: React.FC<OverviewProps> = ({
       {/* ============================================================ */}
       <div className="block md:hidden -mx-6 -mt-6 -mb-6 sm:mx-auto">
         {/* Mobile Frame Container */}
-        <div className="w-full max-w-[412px] mx-auto bg-[#f8fafc] rounded-none sm:rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col">
+        <div className="w-full max-w-[412px] mx-auto bg-[#101726] rounded-none sm:rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col">
           
           {/* Scrollable Content Area */}
-          <div className="flex-1 pb-24 no-scrollbar">
+          <div className="flex-1 pb-24 no-scrollbar bg-[#f8fafc]">
             
-            {/* Top Elegant Header Section (Cor Azul do Sistema) */}
-            <div className="bg-gradient-to-br from-[#121926] via-[#1a2333] to-[#0f172a] text-white pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-16 px-6 rounded-b-[36px] relative shadow-lg">
+            {/* Top Elegant Header Section (100% Sólido e Nítido) */}
+            <div className="bg-gradient-to-b from-[#101726] to-[#0f172a] text-white pt-[calc(env(safe-area-inset-top,20px)+3rem)] pb-16 px-6 rounded-b-[36px] relative shadow-lg">
               
               {/* User Profile & Top Action Icons */}
               <div className="flex justify-between items-center mb-6 relative z-10">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center border border-[#334155]/60 shadow-inner flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#1e293b] flex items-center justify-center border border-[#334155] shadow-inner flex-shrink-0">
                     <Box size={16} className="text-[#84cc16]" />
                   </div>
                   <div>
@@ -572,14 +572,14 @@ const Overview: React.FC<OverviewProps> = ({
                   <button 
                     onClick={() => refresh()}
                     title="Atualizar"
-                    className="w-9 h-9 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm border border-[#334155]/40"
+                    className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm border border-[#334155]"
                   >
                     <Moon size={14} />
                   </button>
                   <button 
                     onClick={() => setShowCardsModal(true)}
                     title="Notificações / Detalhes"
-                    className="w-9 h-9 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm relative border border-[#334155]/40"
+                    className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm relative border border-[#334155]"
                   >
                     <Bell size={14} />
                     <span className="absolute top-2 right-2 w-2 h-2 bg-[#84cc16] rounded-full animate-pulse"></span>
