@@ -20,7 +20,9 @@ import {
   ChevronUp,
   Box,
   ArrowDownRight,
-  ArrowUpRight
+  ArrowUpRight,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month } from '../types';
@@ -213,6 +215,7 @@ const Overview: React.FC<OverviewProps> = ({
   const [loading, setLoading] = useState(true);
   const [showCardsModal, setShowCardsModal] = useState(false);
   const [greeting, setGreeting] = useState('Bom dia!');
+  const [mostrarSaldo, setMostrarSaldo] = useState(false);
 
   useEffect(() => {
     setGreeting(getGreeting());
@@ -549,10 +552,10 @@ const Overview: React.FC<OverviewProps> = ({
           <div className="flex-1 pb-24 no-scrollbar">
             
             {/* Top Elegant Gradient Header Section */}
-            <div className="bg-gradient-to-br from-[#121926] via-[#1a2333] to-[#0f172a] text-white pt-10 pb-16 px-6 rounded-b-[36px] relative shadow-lg">
+            <div className="bg-gradient-to-br from-[#162032] via-[#101726] to-[#0a0f1d] border-b border-cyan-500/10 shadow-2xl text-white pt-[max(2.5rem,env(safe-area-inset-top,20px))] pb-16 px-6 rounded-b-[36px] relative overflow-hidden before:absolute before:top-0 before:left-1/4 before:w-1/2 before:h-28 before:bg-cyan-500/10 before:blur-3xl before:pointer-events-none">
               
               {/* User Profile & Top Action Icons */}
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-6 relative z-10">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center border border-[#334155]/60 shadow-inner flex-shrink-0">
                     <Box size={16} className="text-[#84cc16]" />
@@ -581,36 +584,61 @@ const Overview: React.FC<OverviewProps> = ({
                 </div>
               </div>
 
-              {/* Total Balance Section */}
-              <div className="mb-6">
+              {/* Total Balance Section with Toggle Eye (Hidden by Default, No Cache) */}
+              <div className="mb-6 relative z-10">
                 <div>
-                  <p className="text-xs text-gray-300 font-medium tracking-wide mb-1">Saldo do Mês</p>
-                  <h1 className="text-3xl font-extrabold tracking-tight">{formatCurrency(totals.balance)}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs text-gray-300 font-medium tracking-wide">Saldo do Mês</p>
+                    <button
+                      type="button"
+                      onClick={() => setMostrarSaldo(prev => !prev)}
+                      className="text-gray-400 hover:text-white transition p-1 rounded-lg hover:bg-white/10 active:scale-95 focus:outline-none flex items-center justify-center cursor-pointer"
+                      title={mostrarSaldo ? "Ocultar saldo" : "Visualizar saldo"}
+                      aria-label={mostrarSaldo ? "Ocultar saldo" : "Visualizar saldo"}
+                    >
+                      {mostrarSaldo ? (
+                        <Eye size={15} className="text-blue-200" />
+                      ) : (
+                        <EyeOff size={15} className="text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                  <h1 className="text-3xl font-extrabold tracking-tight select-none">
+                    {mostrarSaldo ? formatCurrency(totals.balance) : '••••••••'}
+                  </h1>
                 </div>
               </div>
 
-              {/* Action Buttons (Despesas, Receitas, More) */}
-              <div className="grid grid-cols-12 gap-3">
+              {/* Action Buttons (Despesas, Receitas, More) with Tactile & Neon Gloss Effects */}
+              <div className="grid grid-cols-12 gap-3 relative z-10">
+                {/* Despesas Button */}
                 <button 
+                  type="button" 
                   onClick={() => onNavigate?.('expenses')}
-                  className="col-span-5 bg-gradient-to-r from-[#7f1d1d] to-[#991b1b] hover:from-[#991b1b] hover:to-[#b91c1c] border border-[#b91c1c]/50 text-white py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 font-medium text-xs transition shadow-md active:scale-95"
+                  className="col-span-5 btn-expense py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 text-white font-bold text-xs transition active:scale-95 cursor-pointer select-none"
                 >
-                  <ArrowDownRight size={14} className="text-red-200" />
+                  <ArrowDownRight size={14} className="text-red-100 flex-shrink-0" />
                   <span className="truncate">Despesas</span>
                 </button>
+
+                {/* Receitas Button with Vibrant Neon Glow & Gloss */}
                 <button 
+                  type="button" 
                   onClick={() => onNavigate?.('revenue')}
-                  className="col-span-5 bg-[#a3e635] hover:bg-[#93d32b] text-[#121926] py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 font-bold text-xs transition shadow-lg active:scale-95"
+                  className="col-span-5 btn-revenue py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 text-slate-950 font-extrabold text-xs transition active:scale-95 cursor-pointer select-none"
                 >
-                  <ArrowUpRight size={14} className="text-[#121926]" />
+                  <ArrowUpRight size={14} className="text-slate-950 flex-shrink-0" />
                   <span className="truncate">Receitas</span>
                 </button>
+
+                {/* More Options Button (Glass) */}
                 <button 
+                  type="button" 
                   onClick={() => onToggleMenu ? onToggleMenu() : onNavigate?.('gastos')}
-                  className="col-span-2 bg-[#1e293b]/80 backdrop-blur-md hover:bg-[#334155] border border-[#334155]/60 text-white py-3 rounded-2xl flex items-center justify-center transition shadow-sm active:scale-95"
+                  className="col-span-2 glass-btn py-3 rounded-2xl flex items-center justify-center text-blue-200 hover:text-white transition active:scale-95 cursor-pointer select-none"
                   title="Mais Opções"
                 >
-                  <MoreVertical size={16} className="text-gray-200" />
+                  <MoreVertical size={16} />
                 </button>
               </div>
             </div>

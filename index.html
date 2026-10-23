@@ -2,12 +2,14 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>M&D Finanças - Gestão Inteligente</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { 
           font-family: 'Inter', sans-serif; 
@@ -38,6 +40,72 @@
         }
         .animate-border-glow {
           animation: borderGlow 3.5s infinite ease-in-out;
+        }
+
+        /* Enhanced Expense Button */
+        .btn-expense {
+            background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+            box-shadow: 0 6px 20px rgba(185, 28, 28, 0.45), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .btn-expense:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+            transform: translateY(-2px);
+        }
+        .btn-expense:active {
+            transform: translateY(0);
+        }
+
+        /* Enhanced Revenue Button with Vibrant Neon Glow & Gloss */
+        .btn-revenue {
+            background: linear-gradient(135deg, #bef264 0%, #84cc16 50%, #65a30d 100%);
+            box-shadow: 0 6px 25px rgba(132, 204, 22, 0.55), 
+                        inset 0 1px 1px rgba(255, 255, 255, 0.7),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(217, 249, 157, 0.8);
+            position: relative;
+            overflow: hidden;
+        }
+        /* Top light reflection sheen */
+        .btn-revenue::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 45%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+            border-top-left-radius: inherit;
+            border-top-right-radius: inherit;
+            pointer-events: none;
+        }
+        .btn-revenue:hover {
+            background: linear-gradient(135deg, #d9f99d 0%, #a3e635 50%, #84cc16 100%);
+            box-shadow: 0 8px 30px rgba(163, 230, 53, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+            transform: translateY(-2px);
+        }
+        .btn-revenue:active {
+            transform: translateY(0);
+        }
+
+        /* Glass More Options Button */
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        .glass-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
         }
     </style>
     <script>
@@ -71,8 +139,8 @@
     <link rel="icon" type="image/png" href="https://res.cloudinary.com/dcmi2z6xp/image/upload/v1779905047/md_iuznaw.png">
     <link rel="apple-touch-icon" href="https://res.cloudinary.com/dcmi2z6xp/image/upload/v1779905047/md_iuznaw.png">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#111827">
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#121926" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#121926">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script>
