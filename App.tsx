@@ -246,7 +246,7 @@ const App: React.FC = () => {
       )}
       {/* Navegação Lateral */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-full lg:w-72 bg-gray-900 border-r border-gray-950 lg:border-r-0 lg:shadow-[4px_0_24px_rgba(0,0,0,0.18)] transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-6 lg:pt-8 lg:pb-8 lg:pl-6 lg:pr-0 overflow-y-auto overflow-x-hidden no-scrollbar">
+        <div className="flex flex-col h-full p-6 pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] lg:pt-8 lg:pb-8 lg:pl-6 lg:pr-0 overflow-y-auto overflow-x-hidden no-scrollbar">
           <div className="flex items-center justify-between lg:justify-start gap-4 mb-8 lg:mb-12 lg:pr-6">
             <div className="flex items-center gap-4">
               <div className="bg-white text-gray-900 p-3 rounded-[1.2rem] lg:rounded-2xl shadow-xl lg:shadow-lg lg:border lg:border-white/20">
@@ -296,7 +296,7 @@ const App: React.FC = () => {
       {/* Área Principal */}
       <main className="flex-1 overflow-y-auto relative no-scrollbar">
         {/* HEADER LINHA DO TEMPO (Visível no topo para todas as telas, exceto no Dashboard Mobile que possui header próprio) */}
-        <div className={`${view === 'overview' ? 'hidden md:block' : 'block'} sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 py-4 lg:px-12 lg:py-6`}>
+        <div className={`${view === 'overview' ? 'hidden md:block' : 'block'} sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 pt-[calc(env(safe-area-inset-top,24px)+1rem)] pb-4 md:py-4 lg:px-12 lg:py-6`}>
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
             
             {/* Context Switcher (Timeline Header) */}
