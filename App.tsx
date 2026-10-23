@@ -28,7 +28,6 @@ import Banks from './components/Banks';
 import Closing from './components/Closing';
 import Installments from './components/Installments';
 import Calculator from './components/Calculator';
-import { InstallBanner } from './components/InstallBanner';
 
 const App: React.FC = () => {
   const [view, setView] = useState<string>('overview');
@@ -40,58 +39,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [triggerAdd, setTriggerAdd] = useState(0);
-
-  // PWA & Android Install State
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
-
-  useEffect(() => {
-    // Detect identity of device as Android
-    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
-    const isAndroid = /android/i.test(userAgent);
-    
-    // Detect if already installed / standalone
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-    
-    // Read session storage dismissal status
-    const isDismissed = sessionStorage.getItem('pwa-dismissed') === 'true';
-
-    if (isAndroid && !isStandalone && !isDismissed) {
-      setShowInstallBanner(true);
-    }
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      if (isAndroid && !isStandalone && !isDismissed) {
-        setShowInstallBanner(true);
-      }
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallApp = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setShowInstallBanner(false);
-      }
-      setDeferredPrompt(null);
-    } else {
-      setShowInstructions(prev => !prev);
-    }
-  };
-
-  const handleDismissBanner = () => {
-    sessionStorage.setItem('pwa-dismissed', 'true');
-    setShowInstallBanner(false);
-  };
 
 
   const viewNames: Record<string, string> = {
@@ -439,14 +386,6 @@ const App: React.FC = () => {
 
         {/* CONTEÚDO DINÂMICO (White Label Isolado por Mês) */}
         <div className={`p-6 lg:p-12 max-w-6xl mx-auto ${view === 'overview' ? 'pb-0 md:pb-12' : 'pb-12'}`}>
-          {/* Aviso de Instalação PWA para Android */}
-          {showInstallBanner && (
-            <InstallBanner 
-              onInstall={handleInstallApp}
-              onDismiss={handleDismissBanner}
-              showInstructions={showInstructions}
-            />
-          )}
 
           {/* Alerta de Mês Fechado ou Virtual */}
           {currentContextMonth.status === 'fechado' && (

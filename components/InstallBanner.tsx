@@ -14,9 +14,8 @@ export const InstallBanner: React.FC<InstallBannerProps> = ({
 }) => {
   return (
     <div className="mb-8 p-6 bg-gradient-to-r from-gray-900 via-gray-850 to-gray-900 text-white rounded-[2rem] border border-gray-800 shadow-2xl relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-      {/* Luz decorativa */}
-      <div className="absolute right-0 top-0 h-40 w-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute left-1/3 bottom-0 h-32 w-32 bg-green-500/5 rounded-full blur-2xl pointer-events-none" />
+      {/* Linhas decorativas nítidas sem blur */}
+      <div className="absolute right-0 top-0 h-32 w-32 bg-emerald-500/5 rounded-full border border-emerald-500/10 pointer-events-none" />
 
       <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
         <div className="flex items-start gap-4">

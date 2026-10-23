@@ -85,7 +85,8 @@ const CompactChart: React.FC<{
   dataKey: 'receitas' | 'despesas';
   colorTheme: 'green' | 'red';
   formatCurrency: (val: number) => string;
-}> = ({ title, data, dataKey, colorTheme, formatCurrency }) => {
+  mostrarValores?: boolean;
+}> = ({ title, data, dataKey, colorTheme, formatCurrency, mostrarValores = true }) => {
   const maxVal = Math.max(...data.map(d => d[dataKey]), 1);
   const ticks = [maxVal, maxVal * 0.75, maxVal * 0.5, maxVal * 0.25, 0];
 
@@ -128,7 +129,7 @@ const CompactChart: React.FC<{
               <div className="flex flex-col justify-between text-right pr-3 text-[9px] font-black text-gray-400 select-none w-14 sm:w-16 py-1 h-full border-r border-gray-150">
                 {ticks.map((tick, i) => (
                   <span key={i} className="truncate">
-                    {formatYAxisValue(tick)}
+                    {mostrarValores ? formatYAxisValue(tick) : 'R$ •••'}
                   </span>
                 ))}
               </div>
@@ -164,10 +165,12 @@ const CompactChart: React.FC<{
                             style={{ height: `${Math.max(22, pct)}%` }}
                           >
                             <span 
-                              className="text-[10px] sm:text-[12px] font-black tracking-tight text-white select-none pb-1" 
+                              className={`text-[10px] sm:text-[12px] font-black tracking-tight text-white select-none pb-1 transition-all ${
+                                mostrarValores ? '' : 'blur-[3px] select-none opacity-40'
+                              }`} 
                               style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}
                             >
-                              {formatCurrency(val)}
+                              {mostrarValores ? formatCurrency(val) : '••••••••'}
                             </span>
                           </div>
                         )}
@@ -215,7 +218,7 @@ const Overview: React.FC<OverviewProps> = ({
   const [loading, setLoading] = useState(true);
   const [showCardsModal, setShowCardsModal] = useState(false);
   const [greeting, setGreeting] = useState('Bom dia!');
-  const [mostrarSaldo, setMostrarSaldo] = useState(false);
+  const [mostrarValores, setMostrarValores] = useState(false);
 
   useEffect(() => {
     setGreeting(getGreeting());
@@ -584,19 +587,19 @@ const Overview: React.FC<OverviewProps> = ({
                 </div>
               </div>
 
-              {/* Total Balance Section with Toggle Eye (Hidden by Default, No Cache) */}
+              {/* Total Balance Section with Toggle Eye (Universal Hide, Hidden by Default, Zero Cache) */}
               <div className="mb-6 relative z-10">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-xs text-gray-300 font-medium tracking-wide">Saldo do Mês</p>
                     <button
                       type="button"
-                      onClick={() => setMostrarSaldo(prev => !prev)}
+                      onClick={() => setMostrarValores(prev => !prev)}
                       className="text-gray-400 hover:text-white transition p-1 rounded-lg hover:bg-white/10 active:scale-95 focus:outline-none flex items-center justify-center cursor-pointer"
-                      title={mostrarSaldo ? "Ocultar saldo" : "Visualizar saldo"}
-                      aria-label={mostrarSaldo ? "Ocultar saldo" : "Visualizar saldo"}
+                      title={mostrarValores ? "Ocultar todos os valores do Dashboard" : "Exibir todos os valores do Dashboard"}
+                      aria-label={mostrarValores ? "Ocultar todos os valores do Dashboard" : "Exibir todos os valores do Dashboard"}
                     >
-                      {mostrarSaldo ? (
+                      {mostrarValores ? (
                         <Eye size={15} className="text-blue-200" />
                       ) : (
                         <EyeOff size={15} className="text-gray-400" />
@@ -604,7 +607,7 @@ const Overview: React.FC<OverviewProps> = ({
                     </button>
                   </div>
                   <h1 className="text-3xl font-extrabold tracking-tight select-none">
-                    {mostrarSaldo ? formatCurrency(totals.balance) : '••••••••'}
+                    {mostrarValores ? formatCurrency(totals.balance) : 'R$ ••••••••'}
                   </h1>
                 </div>
               </div>
@@ -768,7 +771,9 @@ const Overview: React.FC<OverviewProps> = ({
                 <div className="grid grid-cols-3 gap-2 py-3 px-2 bg-slate-100/70 rounded-2xl mb-4 text-center border border-slate-200/40">
                   <div>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Fatura Atual</p>
-                    <p className="text-xs font-black text-gray-900 truncate">{formatCurrency(currentCard.fatura)}</p>
+                    <p className="text-xs font-black text-gray-900 truncate">
+                      {mostrarValores ? formatCurrency(currentCard.fatura) : 'R$ ••••••••'}
+                    </p>
                   </div>
                   <div className="border-x border-slate-200/80 px-1">
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Vencimento</p>
@@ -777,7 +782,7 @@ const Overview: React.FC<OverviewProps> = ({
                   <div>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Limite Disp.</p>
                     <p className="text-xs font-black text-emerald-600 truncate">
-                      {formatCurrency(Math.max(0, currentCard.limiteTotal - currentCard.fatura))}
+                      {mostrarValores ? formatCurrency(Math.max(0, currentCard.limiteTotal - currentCard.fatura)) : 'R$ ••••••••'}
                     </p>
                   </div>
                 </div>
@@ -787,7 +792,7 @@ const Overview: React.FC<OverviewProps> = ({
                   <div 
                     className="h-full bg-gray-900 rounded-full transition-all duration-500" 
                     style={{ 
-                      width: `${Math.min(100, currentCard.limiteTotal > 0 ? (currentCard.fatura / currentCard.limiteTotal) * 100 : 0)}%` 
+                      width: mostrarValores ? `${Math.min(100, currentCard.limiteTotal > 0 ? (currentCard.fatura / currentCard.limiteTotal) * 100 : 0)}%` : '0%' 
                     }} 
                   />
                 </div>
@@ -828,7 +833,9 @@ const Overview: React.FC<OverviewProps> = ({
                   </div>
                   <div className="mt-3">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Receitas Totais</p>
-                    <h3 className="text-base font-black text-gray-900 truncate">{formatCurrency(totals.revenue)}</h3>
+                    <h3 className="text-base font-black text-gray-900 truncate">
+                      {mostrarValores ? formatCurrency(totals.revenue) : 'R$ ••••••••'}
+                    </h3>
                   </div>
                 </div>
 
@@ -847,7 +854,9 @@ const Overview: React.FC<OverviewProps> = ({
                   </div>
                   <div className="mt-3">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Despesas Totais</p>
-                    <h3 className="text-base font-black text-gray-900 truncate">{formatCurrency(totals.expenses)}</h3>
+                    <h3 className="text-base font-black text-gray-900 truncate">
+                      {mostrarValores ? formatCurrency(totals.expenses) : 'R$ ••••••••'}
+                    </h3>
                   </div>
                 </div>
               </div>
@@ -861,6 +870,7 @@ const Overview: React.FC<OverviewProps> = ({
                 dataKey="receitas"
                 colorTheme="green"
                 formatCurrency={formatCurrency}
+                mostrarValores={mostrarValores}
               />
               <CompactChart 
                 title="Evolução das Despesas (Últimos 4 meses)"
@@ -868,6 +878,7 @@ const Overview: React.FC<OverviewProps> = ({
                 dataKey="despesas"
                 colorTheme="red"
                 formatCurrency={formatCurrency}
+                mostrarValores={mostrarValores}
               />
             </div>
 
@@ -901,7 +912,9 @@ const Overview: React.FC<OverviewProps> = ({
                 bankDetails.map((bank, idx) => (
                   <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
                     <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">{bank.nome}</span>
-                    <span className="text-xs font-black text-gray-900">{formatCurrency(bank.valor)}</span>
+                    <span className="text-xs font-black text-gray-900">
+                      {mostrarValores ? formatCurrency(bank.valor) : 'R$ ••••••••'}
+                    </span>
                   </div>
                 ))
               )}
@@ -910,7 +923,9 @@ const Overview: React.FC<OverviewProps> = ({
             <div className="pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center p-4 bg-gray-900 rounded-2xl text-white">
                 <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Total Faturas</span>
-                <span className="text-base font-black tracking-tight">{formatCurrency(totals.cards)}</span>
+                <span className="text-base font-black tracking-tight">
+                  {mostrarValores ? formatCurrency(totals.cards) : 'R$ ••••••••'}
+                </span>
               </div>
             </div>
           </div>
