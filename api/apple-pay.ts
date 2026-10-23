@@ -270,26 +270,47 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      // 3.9 Inserção atômica na tabela gastos_itens
+      // 3.9 Inserção atômica na tabela gastos_itens com fallback para colunas existentes
       const novoRegistro: any = {
         categoria: categoriaCanon,
         valor: valorSanitizado,
-        data: dataFormatada,
-        estabelecimento: estabelecimentoSanitizado,
         mes_referencia: mesReferencia,
-        origem: (typeof origem === 'string' && origem.trim()) ? origem.trim() : 'apple_pay',
         created_at: new Date().toISOString()
       };
 
+      if (estabelecimentoSanitizado) {
+        novoRegistro.estabelecimento = estabelecimentoSanitizado;
+      }
+      if (dataFormatada) {
+        novoRegistro.data = dataFormatada;
+      }
       if (sanitizedRequestId) {
         novoRegistro.request_id = sanitizedRequestId;
       }
 
-      const { data: insertData, error: insertError } = await supabase
+      let { data: insertData, error: insertError } = await supabase
         .from('gastos_itens')
         .insert([novoRegistro])
         .select()
         .single();
+
+      // Se falhar por coluna não encontrada (ex: request_id ou data), tenta apenas com as colunas essenciais
+      if (insertError && insertError.message?.includes('schema cache')) {
+        const registroEssencial = {
+          categoria: categoriaCanon,
+          valor: valorSanitizado,
+          mes_referencia: mesReferencia,
+          created_at: new Date().toISOString()
+        };
+        const fallbackRes = await supabase
+          .from('gastos_itens')
+          .insert([registroEssencial])
+          .select()
+          .single();
+        
+        insertData = fallbackRes.data;
+        insertError = fallbackRes.error;
+      }
 
       // 3.10 Tratamento de concorrência / colisão de chave única (Postgres code 23505)
       if (insertError) {

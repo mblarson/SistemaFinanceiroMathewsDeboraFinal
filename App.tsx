@@ -14,7 +14,9 @@ import {
   Clock,
   CalendarDays,
   Calculator as CalcIcon,
-  ShoppingBag
+  ShoppingBag,
+  ChevronUp,
+  FileText
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
@@ -31,6 +33,7 @@ import { InstallBanner } from './components/InstallBanner';
 const App: React.FC = () => {
   const [view, setView] = useState<string>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeMonth, setActiveMonth] = useState<Month | null>(null);
   const [provisionMonth, setProvisionMonth] = useState<Month | null>(null);
   const [currentContextMonth, setCurrentContextMonth] = useState<Month | null>(null);
@@ -259,7 +262,7 @@ const App: React.FC = () => {
 
   const handleContextChange = (month: Month) => {
     if (month.id === -1) {
-      alert("Atenção: Este é um mês de visualização (não salvo no banco). Verifique as permissões do sistema.");
+      console.warn("Atenção: Este é um mês de visualização (não salvo no banco).");
     }
     // White Label Reset: Força a limpeza de todo o estado mudando a key dos componentes
     setCurrentContextMonth(month);
@@ -269,7 +272,7 @@ const App: React.FC = () => {
 
   const onAddClick = () => {
     if (currentContextMonth?.id === -1) {
-      alert("Não é possível adicionar registros em um mês de visualização (erro de permissão na criação).");
+      console.warn("Não é possível adicionar registros em um mês de visualização.");
       return;
     }
     setTriggerAdd(prev => prev + 1);
@@ -345,8 +348,8 @@ const App: React.FC = () => {
 
       {/* Área Principal */}
       <main className="flex-1 overflow-y-auto relative no-scrollbar">
-        {/* HEADER LINHA DO TEMPO */}
-        <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 py-4 lg:px-12 lg:py-6">
+        {/* HEADER LINHA DO TEMPO (Visível no topo para todas as telas, exceto no Dashboard Mobile que possui header próprio) */}
+        <div className={`${view === 'overview' ? 'hidden md:block' : 'block'} sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-gray-100 lg:border-gray-200/70 lg:shadow-sm px-6 py-4 lg:px-12 lg:py-6`}>
           <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
             
             {/* Context Switcher (Timeline Header) */}
@@ -435,7 +438,7 @@ const App: React.FC = () => {
         </div>
 
         {/* CONTEÚDO DINÂMICO (White Label Isolado por Mês) */}
-        <div className="p-6 lg:p-12 max-w-6xl mx-auto">
+        <div className={`p-6 lg:p-12 max-w-6xl mx-auto ${view === 'overview' ? 'pb-0 md:pb-12' : 'pb-12'}`}>
           {/* Aviso de Instalação PWA para Android */}
           {showInstallBanner && (
             <InstallBanner 
@@ -467,7 +470,18 @@ const App: React.FC = () => {
           )}
 
           {/* Renderização Condicional com Reset de State via Key */}
-          {view === 'overview' && <Overview key={`ov-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} refresh={handleGlobalRefresh} />}
+          {view === 'overview' && (
+            <Overview 
+              key={`ov-${refreshKey}-${currentContextMonth.id}`} 
+              currentMonth={currentContextMonth} 
+              activeMonth={activeMonth}
+              provisionMonth={provisionMonth}
+              onSelectMonth={handleContextChange}
+              refresh={handleGlobalRefresh}
+              onNavigate={handleNavigate}
+              onToggleMenu={() => setIsMobileMenuOpen(prev => !prev)}
+            />
+          )}
           {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
@@ -476,6 +490,118 @@ const App: React.FC = () => {
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
           {view === 'calculator' && <Calculator key="calculator" />}
         </div>
+
+        {/* ============================================================ */}
+        {/* NAVBAR INFERIOR EXCLUSIVA DO DASHBOARD MOBILE                */}
+        {/* ============================================================ */}
+        {view === 'overview' && (
+          <div className="block md:hidden fixed bottom-5 left-4 right-4 z-40 max-w-[412px] mx-auto pointer-events-auto">
+          {/* Dropdown retrátil de menus reais */}
+          {isMobileMenuOpen && (
+            <div className="mb-2 bg-[#121926]/95 backdrop-blur-xl rounded-2xl p-2 shadow-2xl border border-[#334155]/60 flex flex-col space-y-1 text-white animate-in slide-in-from-bottom-3 duration-200">
+              <button 
+                onClick={() => { handleNavigate('overview'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'overview' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <LayoutDashboard size={14} className="w-4 text-center" />
+                <span>Dashboard</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('gastos'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'gastos' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <ShoppingBag size={14} className="w-4 text-center" />
+                <span>Gastos</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('expenses'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'expenses' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <Receipt size={14} className="w-4 text-center" />
+                <span>Despesas</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('revenue'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'revenue' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <TrendingUp size={14} className="w-4 text-center" />
+                <span>Receitas</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('banks'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'banks' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <Banknote size={14} className="w-4 text-center" />
+                <span>Cartões</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('installments'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'installments' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <CalendarClock size={14} className="w-4 text-center" />
+                <span>Parcelas</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('closing'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'closing' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <Clock size={14} className="w-4 text-center" />
+                <span>Arquivo</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('calculator'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'calculator' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <CalcIcon size={14} className="w-4 text-center" />
+                <span>Calculadora</span>
+              </button>
+            </div>
+          )}
+
+          {/* Botão Principal Flutuante com Gradiente */}
+          <div 
+            onClick={() => setIsMobileMenuOpen(prev => !prev)} 
+            className="bg-gradient-to-r from-[#121926] via-[#1a2333] to-[#0f172a] py-4 px-6 rounded-full flex justify-between items-center shadow-2xl border border-[#334155]/50 cursor-pointer hover:opacity-95 transition active:scale-98"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full bg-[#1e293b] flex items-center justify-center text-[#84cc16] shadow-sm">
+                {view === 'overview' && <LayoutDashboard size={14} />}
+                {view === 'gastos' && <ShoppingBag size={14} />}
+                {view === 'expenses' && <Receipt size={14} />}
+                {view === 'revenue' && <TrendingUp size={14} />}
+                {view === 'banks' && <Banknote size={14} />}
+                {view === 'installments' && <CalendarClock size={14} />}
+                {view === 'closing' && <Clock size={14} />}
+                {view === 'calculator' && <CalcIcon size={14} />}
+              </div>
+              <span className="text-white font-bold text-sm tracking-wide">{viewNames[view] || 'Dashboard'}</span>
+            </div>
+            <div className="text-gray-300 flex items-center space-x-2">
+              <span className="text-[11px] bg-[#1e293b] px-2.5 py-1 rounded-full text-gray-200 font-medium">Menu</span>
+              <ChevronUp 
+                size={14} 
+                className={`text-gray-300 transition-transform duration-300 ${isMobileMenuOpen ? 'rotate-180' : ''}`} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
       </main>
     </div>
   );

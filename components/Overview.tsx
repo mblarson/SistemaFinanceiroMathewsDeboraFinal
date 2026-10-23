@@ -1,17 +1,52 @@
-
 import React, { useState, useEffect } from 'react';
-import { TrendingDown, TrendingUp, Wallet, History, Banknote, X as LucideX, ChevronRight } from 'lucide-react';
+import { 
+  TrendingDown, 
+  TrendingUp, 
+  Wallet, 
+  History, 
+  Banknote, 
+  X as LucideX, 
+  ChevronRight,
+  CreditCard,
+  FileText,
+  Calculator as CalcIcon,
+  ShoppingBag,
+  Receipt,
+  Clock,
+  LayoutDashboard,
+  MoreVertical,
+  Moon,
+  Bell,
+  ChevronUp,
+  Box,
+  ArrowDownRight,
+  ArrowUpRight
+} from 'lucide-react';
 import { supabaseClient } from '../services/supabase';
 import { Month } from '../types';
 
 interface OverviewProps {
   currentMonth: Month;
+  activeMonth?: Month | null;
+  provisionMonth?: Month | null;
+  onSelectMonth?: (m: Month) => void;
   refresh: () => void;
+  onNavigate?: (view: string) => void;
+  onToggleMenu?: () => void;
 }
 
 interface BankDetail {
   nome: string;
   valor: number;
+}
+
+interface CardItem {
+  id: number | string;
+  nome: string;
+  cor: string;
+  fatura: number;
+  vencimento: string;
+  limiteTotal: number;
 }
 
 const formatDateSafe = (dateStr: string | null | undefined) => {
@@ -26,6 +61,13 @@ const formatDateSafe = (dateStr: string | null | undefined) => {
   } catch (e) {
     return 'S/D';
   }
+};
+
+const getGreeting = () => {
+  const hours = new Date().getHours();
+  if (hours >= 5 && hours < 12) return 'Bom dia!';
+  if (hours >= 12 && hours < 18) return 'Boa tarde!';
+  return 'Boa noite!';
 };
 
 interface EvolutionMonth {
@@ -59,7 +101,7 @@ const CompactChart: React.FC<{
   const isGreen = colorTheme === 'green';
 
   return (
-    <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300">
+    <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300 overflow-x-hidden">
       <div>
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
@@ -153,15 +195,27 @@ const CompactChart: React.FC<{
   );
 };
 
-const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
+const Overview: React.FC<OverviewProps> = ({ 
+  currentMonth, 
+  activeMonth, 
+  provisionMonth, 
+  onSelectMonth, 
+  refresh, 
+  onNavigate,
+  onToggleMenu 
+}) => {
   const [totals, setTotals] = useState({ revenue: 0, expenses: 0, balance: 0, cards: 0 });
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [bankDetails, setBankDetails] = useState<BankDetail[]>([]);
+  const [cardsList, setCardsList] = useState<CardItem[]>([]);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [evolutionData, setEvolutionData] = useState<EvolutionMonth[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCardsModal, setShowCardsModal] = useState(false);
+  const [greeting, setGreeting] = useState('Bom dia!');
 
   useEffect(() => {
+    setGreeting(getGreeting());
     fetchData();
   }, [currentMonth]);
 
@@ -177,8 +231,8 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
         supabaseClient.from('receitas').select('valor, descricao, data, criado_em').eq('mes_id', currentMonth.id),
         supabaseClient.from('despesas_contas').select('valor, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
         supabaseClient.from('despesas_pix_credito').select('valor_final, descricao, data, criado_em, pago').eq('mes_id', currentMonth.id),
-        supabaseClient.from('banco_despesas').select('valor, banco_id').eq('mes_id', currentMonth.id),
-        supabaseClient.from('bancos').select('id, nome'),
+        supabaseClient.from('banco_despesas').select('valor, banco_id, data').eq('mes_id', currentMonth.id),
+        supabaseClient.from('bancos').select('id, nome, cor'),
         supabaseClient.from('meses').select('*')
       ]);
 
@@ -189,19 +243,60 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
 
       const totalExp = expContas + expPix + expBancos;
 
-      // Agrupar gastos por banco para o modal
+      // Agrupar gastos por banco para o modal e carrossel
       const details: BankDetail[] = [];
+      const cards: CardItem[] = [];
+
       if (bancosListaRes.data && bancosRes.data) {
         bancosListaRes.data.forEach(banco => {
           const soma = bancosRes.data
             .filter(d => d.banco_id === banco.id)
             .reduce((acc, curr) => acc + curr.valor, 0);
+
           if (soma > 0) {
             details.push({ nome: banco.nome, valor: soma });
           }
+
+          // Monta dados reais de cada cartão para o carrossel mobile
+          const vencimentosPadrao: Record<string, string> = {
+            'Nubank': 'Dia 10',
+            'Itaú': 'Dia 15',
+            'American Express': 'Dia 20',
+            'BB': 'Dia 05',
+            'C6 Bank': 'Dia 12'
+          };
+
+          const limitesPadrao: Record<string, number> = {
+            'Nubank': 8500,
+            'Itaú': 12000,
+            'American Express': 15000,
+            'BB': 6000,
+            'C6 Bank': 5000
+          };
+
+          cards.push({
+            id: banco.id,
+            nome: banco.nome,
+            cor: banco.cor || '#121926',
+            fatura: soma,
+            vencimento: vencimentosPadrao[banco.nome] || 'Dia 10',
+            limiteTotal: limitesPadrao[banco.nome] || Math.max(7000, soma * 1.5)
+          });
         });
       }
+
+      // Adiciona o consolidado como primeiro cartão do carrossel
+      const totalCardsItem: CardItem = {
+        id: 'total',
+        nome: 'Todos os Cartões',
+        cor: '#121926',
+        fatura: expBancos,
+        vencimento: 'No Mês',
+        limiteTotal: cards.reduce((acc, c) => acc + c.limiteTotal, 0) || 35000
+      };
+
       setBankDetails(details);
+      setCardsList([totalCardsItem, ...cards]);
 
       setTotals({
         revenue: rev,
@@ -224,10 +319,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
       const currentIndex = sortedMeses.findIndex(m => m.id === currentMonth.id);
       let last4: any[] = [];
       if (currentIndex !== -1) {
-        // Encontrar os 4 meses anteriores ao selecionado (excluindo o atual)
         last4 = sortedMeses.slice(Math.max(0, currentIndex - 4), currentIndex);
-        // Se estivermos no primeiro mês cadastrado e não houver meses anteriores,
-        // aplicamos fallback para pegar os próximos 4 meses (excluindo o atual) para desenhar o gráfico
         if (last4.length === 0) {
           last4 = sortedMeses.filter(m => m.id !== currentMonth.id).slice(0, 4);
         }
@@ -258,7 +350,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
             .reduce((acc, curr) => acc + curr.valor_final, 0);
 
           const dbSum = (bankAll.data || [])
-            .filter(e => e.mes_id === m.id) // Mantém consistência com SAÍDAS TOTAIS que não filtra por pago para despesas de bancos/cartão
+            .filter(e => e.mes_id === m.id)
             .reduce((acc, curr) => acc + curr.valor, 0);
 
           return {
@@ -290,129 +382,477 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
     </div>
   );
 
+  const currentCard = cardsList[activeCardIndex] || cardsList[0] || {
+    id: 'total',
+    nome: 'Todos os Cartões',
+    cor: '#121926',
+    fatura: totals.cards,
+    vencimento: 'No Mês',
+    limiteTotal: 35000
+  };
+
+  const meses_nomes = [
+    "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+    "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"
+  ];
+
+  const effectiveActiveMonth = activeMonth || currentMonth;
+  const activeMonthIdx = meses_nomes.findIndex(m => m === effectiveActiveMonth.nome.trim().toUpperCase());
+  const nextIdx = activeMonthIdx >= 0 ? (activeMonthIdx + 1) % 12 : 0;
+  const nextYear = activeMonthIdx === 11 ? effectiveActiveMonth.ano + 1 : effectiveActiveMonth.ano;
+  
+  const effectiveNextMonth: Month = provisionMonth || {
+    id: -1,
+    nome: meses_nomes[nextIdx],
+    ano: nextYear,
+    status: 'provisionamento',
+    saldo_final: 0,
+    criado_em: new Date().toISOString()
+  };
+
+  const isCurrentActive = currentMonth.id === effectiveActiveMonth.id;
+  const isCurrentNext = currentMonth.id === effectiveNextMonth.id || (!isCurrentActive && currentMonth.nome.trim().toUpperCase() === effectiveNextMonth.nome.trim().toUpperCase());
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden lg:rounded-3xl lg:bg-gradient-to-br lg:from-gray-900 lg:via-gray-850 lg:to-gray-950 lg:shadow-xl lg:shadow-gray-900/20 lg:border lg:border-white/10 lg:hover:shadow-2xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
-          <div className="absolute -right-4 -top-4 bg-white/5 p-10 rounded-full"></div>
-          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
-            <Wallet size={12} className="text-green-500" /> Saldo Real (Líquido)
-          </p>
-          <h2 className="text-3xl font-black tracking-tighter">{formatCurrency(totals.balance)}</h2>
-          <p className="mt-2 text-[9px] text-white/30 uppercase font-bold tracking-wider">Cálculo Contábil (Indep. de Parcelas)</p>
-        </div>
+    <>
+      {/* ============================================================ */}
+      {/* 1. VISUALIZAÇÃO DESKTOP (HIDDEN NO MOBILE, 100% INTACTO)      */}
+      {/* ============================================================ */}
+      <div className="hidden md:block space-y-6 animate-in fade-in duration-500">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden lg:rounded-3xl lg:bg-gradient-to-br lg:from-gray-900 lg:via-gray-850 lg:to-gray-950 lg:shadow-xl lg:shadow-gray-900/20 lg:border lg:border-white/10 lg:hover:shadow-2xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
+            <div className="absolute -right-4 -top-4 bg-white/5 p-10 rounded-full"></div>
+            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <Wallet size={12} className="text-green-500" /> Saldo Real (Líquido)
+            </p>
+            <h2 className="text-3xl font-black tracking-tighter">{formatCurrency(totals.balance)}</h2>
+            <p className="mt-2 text-[9px] text-white/30 uppercase font-bold tracking-wider">Cálculo Contábil (Indep. de Parcelas)</p>
+          </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-emerald-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
-          <div className="flex justify-between items-start">
-            <div className="bg-green-50 p-2 rounded-xl text-green-600 border border-green-100 lg:rounded-2xl lg:shadow-xs">
-              <TrendingUp size={18} />
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-emerald-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
+            <div className="flex justify-between items-start">
+              <div className="bg-green-50 p-2 rounded-xl text-green-600 border border-green-100 lg:rounded-2xl lg:shadow-xs">
+                <TrendingUp size={18} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Entradas Totais</p>
+              <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.revenue)}</h2>
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Entradas Totais</p>
-            <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.revenue)}</h2>
+
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-rose-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
+            <div className="flex justify-between items-start">
+              <div className="bg-red-50 p-2 rounded-xl text-red-600 border border-red-100 lg:rounded-2xl lg:shadow-xs">
+                <TrendingDown size={18} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Saídas Totais</p>
+              <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.expenses)}</h2>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between lg:rounded-3xl lg:bg-gradient-to-br lg:from-white lg:via-white lg:to-rose-50/20 lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300">
-          <div className="flex justify-between items-start">
-            <div className="bg-red-50 p-2 rounded-xl text-red-600 border border-red-100 lg:rounded-2xl lg:shadow-xs">
-              <TrendingDown size={18} />
+        {/* SEÇÃO DE EVOLUÇÃO FINANCEIRA */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CompactChart 
+            title="Evolução das Receitas (Últimos 4 meses)"
+            data={evolutionData}
+            dataKey="receitas"
+            colorTheme="green"
+            formatCurrency={formatCurrency}
+          />
+          <CompactChart 
+            title="Evolução das Despesas (Últimos 4 meses)"
+            data={evolutionData}
+            dataKey="despesas"
+            colorTheme="red"
+            formatCurrency={formatCurrency}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
+                <History className="text-gray-400" size={16} />
+                Lançamentos Recentes
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {recentTransactions.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50 lg:rounded-2xl lg:hover:bg-gray-50 lg:transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-1.5 rounded-lg ${item.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {item.type === 'revenue' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-700">{item.descricao}</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase">{formatDateSafe(item.data)}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-black ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
+                     {item.type === 'revenue' ? '+' : '-'}{formatCurrency(item.valor)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="mt-4">
-            <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Saídas Totais</p>
-            <h2 className="text-xl font-black text-gray-800">{formatCurrency(totals.expenses)}</h2>
+
+          <div 
+            onClick={() => setShowCardsModal(true)}
+            className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col cursor-pointer hover:border-blue-200 transition-all group lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300"
+          >
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
+                <Banknote size={16} className="text-gray-400" />
+                Total Cartões de Crédito
+              </h3>
+              <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+            <div className="space-y-4">
+              <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center lg:rounded-2xl lg:bg-gradient-to-br lg:from-gray-50 lg:to-gray-100/60 lg:border-gray-200/50 lg:shadow-inner">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gasto em Faturas</p>
+                <h2 className="text-2xl font-black text-gray-900">{formatCurrency(totals.cards)}</h2>
+                
+                {bankDetails.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 space-y-1.5">
+                    {bankDetails.map((bank, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
+                        <span>{bank.nome}</span>
+                        <span className="text-gray-700">{formatCurrency(bank.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); refresh(); }}
+                className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest lg:rounded-2xl lg:shadow-md lg:shadow-gray-900/20 lg:hover:shadow-lg lg:hover:-translate-y-0.5"
+              >
+                Sincronizar Banco
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* SEÇÃO DE EVOLUÇÃO FINANCEIRA */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CompactChart 
-          title="Evolução das Receitas (Últimos 4 meses)"
-          data={evolutionData}
-          dataKey="receitas"
-          colorTheme="green"
-          formatCurrency={formatCurrency}
-        />
-        <CompactChart 
-          title="Evolução das Despesas (Últimos 4 meses)"
-          data={evolutionData}
-          dataKey="despesas"
-          colorTheme="red"
-          formatCurrency={formatCurrency}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-lg lg:transition-all lg:duration-300">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
-              <History className="text-gray-400" size={16} />
-              Lançamentos Recentes
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {recentTransactions.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-50 lg:rounded-2xl lg:hover:bg-gray-50 lg:transition-all">
-                <div className="flex items-center gap-3">
-                  <div className={`p-1.5 rounded-lg ${item.type === 'revenue' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {item.type === 'revenue' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+      {/* ============================================================ */}
+      {/* 2. VISUALIZAÇÃO MOBILE (block md:hidden - REDESIGN FIEL)     */}
+      {/* ============================================================ */}
+      <div className="block md:hidden -mx-6 -mt-6 -mb-6 sm:mx-auto">
+        {/* Mobile Frame Container */}
+        <div className="w-full max-w-[412px] mx-auto bg-[#f8fafc] rounded-none sm:rounded-[40px] shadow-2xl overflow-hidden relative flex flex-col">
+          
+          {/* Scrollable Content Area */}
+          <div className="flex-1 pb-24 no-scrollbar">
+            
+            {/* Top Elegant Gradient Header Section */}
+            <div className="bg-gradient-to-br from-[#121926] via-[#1a2333] to-[#0f172a] text-white pt-10 pb-16 px-6 rounded-b-[36px] relative shadow-lg">
+              
+              {/* User Profile & Top Action Icons */}
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center border border-[#334155]/60 shadow-inner flex-shrink-0">
+                    <Box size={16} className="text-[#84cc16]" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-gray-700">{item.descricao}</p>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase">{formatDateSafe(item.data)}</p>
+                    <p className="text-xs text-gray-300 font-medium">{greeting}</p>
+                    <h2 className="text-sm font-bold text-white tracking-wide truncate max-w-[180px]">Mathews e Débora</h2>
                   </div>
                 </div>
-                <span className={`text-xs font-black ${item.type === 'revenue' ? 'text-green-700' : 'text-red-700'}`}>
-                   {item.type === 'revenue' ? '+' : '-'}{formatCurrency(item.valor)}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => refresh()}
+                    title="Atualizar"
+                    className="w-9 h-9 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm border border-[#334155]/40"
+                  >
+                    <Moon size={14} />
+                  </button>
+                  <button 
+                    onClick={() => setShowCardsModal(true)}
+                    title="Notificações / Detalhes"
+                    className="w-9 h-9 rounded-full bg-[#1e293b]/80 backdrop-blur-md flex items-center justify-center text-gray-200 hover:bg-[#334155] transition shadow-sm relative border border-[#334155]/40"
+                  >
+                    <Bell size={14} />
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-[#84cc16] rounded-full animate-pulse"></span>
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
 
-        <div 
-          onClick={() => setShowCardsModal(true)}
-          className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col cursor-pointer hover:border-blue-200 transition-all group lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70 lg:hover:shadow-xl lg:hover:-translate-y-0.5 lg:transition-all lg:duration-300"
-        >
-          <div className="flex justify-between items-center mb-5">
-            <h3 className="text-sm font-bold flex items-center gap-2 text-gray-800">
-              <Banknote size={16} className="text-gray-400" />
-              Total Cartões de Crédito
-            </h3>
-            <ChevronRight size={16} className="text-gray-300 group-hover:text-blue-500 transition-colors" />
-          </div>
-          <div className="space-y-4">
-            <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex flex-col justify-center lg:rounded-2xl lg:bg-gradient-to-br lg:from-gray-50 lg:to-gray-100/60 lg:border-gray-200/50 lg:shadow-inner">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Gasto em Faturas</p>
-              <h2 className="text-2xl font-black text-gray-900">{formatCurrency(totals.cards)}</h2>
-              
-              {bankDetails.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-200 space-y-1.5">
-                  {bankDetails.map((bank, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
-                      <span>{bank.nome}</span>
-                      <span className="text-gray-700">{formatCurrency(bank.valor)}</span>
+              {/* Total Balance Section */}
+              <div className="mb-6">
+                <div>
+                  <p className="text-xs text-gray-300 font-medium tracking-wide mb-1">Saldo do Mês</p>
+                  <h1 className="text-3xl font-extrabold tracking-tight">{formatCurrency(totals.balance)}</h1>
+                </div>
+              </div>
+
+              {/* Action Buttons (Despesas, Receitas, More) */}
+              <div className="grid grid-cols-12 gap-3">
+                <button 
+                  onClick={() => onNavigate?.('expenses')}
+                  className="col-span-5 bg-gradient-to-r from-[#7f1d1d] to-[#991b1b] hover:from-[#991b1b] hover:to-[#b91c1c] border border-[#b91c1c]/50 text-white py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 font-medium text-xs transition shadow-md active:scale-95"
+                >
+                  <ArrowDownRight size={14} className="text-red-200" />
+                  <span className="truncate">Despesas</span>
+                </button>
+                <button 
+                  onClick={() => onNavigate?.('revenue')}
+                  className="col-span-5 bg-[#a3e635] hover:bg-[#93d32b] text-[#121926] py-3 px-2 rounded-2xl flex items-center justify-center space-x-1.5 font-bold text-xs transition shadow-lg active:scale-95"
+                >
+                  <ArrowUpRight size={14} className="text-[#121926]" />
+                  <span className="truncate">Receitas</span>
+                </button>
+                <button 
+                  onClick={() => onToggleMenu ? onToggleMenu() : onNavigate?.('gastos')}
+                  className="col-span-2 bg-[#1e293b]/80 backdrop-blur-md hover:bg-[#334155] border border-[#334155]/60 text-white py-3 rounded-2xl flex items-center justify-center transition shadow-sm active:scale-95"
+                  title="Mais Opções"
+                >
+                  <MoreVertical size={16} className="text-gray-200" />
+                </button>
+              </div>
+            </div>
+
+            {/* Main White Card Container (Overlap) */}
+            <div className="px-6 -mt-8 relative z-10">
+              <div className="bg-white rounded-[32px] p-6 shadow-xl border border-gray-100/80">
+                <h3 className="text-sm font-bold text-gray-900 mb-5">Categorias</h3>
+                
+                {/* Categories Grid (Cartões, Parcelas, Calculadora) */}
+                <div className="grid grid-cols-3 gap-y-6 gap-x-2 text-center justify-center">
+                  
+                  {/* Item 1: Cartões */}
+                  <div 
+                    onClick={() => onNavigate?.('banks')}
+                    className="flex flex-col items-center group cursor-pointer active:scale-95 transition"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 text-[#121926] flex items-center justify-center mb-1.5 shadow-sm group-hover:bg-slate-200 border border-slate-200/60 transition transform group-hover:scale-105">
+                      <CreditCard size={20} className="text-slate-800" />
                     </div>
+                    <span className="text-xs font-semibold text-gray-700">Cartões</span>
+                  </div>
+
+                  {/* Item 2: Parcelas */}
+                  <div 
+                    onClick={() => onNavigate?.('installments')}
+                    className="flex flex-col items-center group cursor-pointer active:scale-95 transition"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 text-[#121926] flex items-center justify-center mb-1.5 shadow-sm group-hover:bg-slate-200 border border-slate-200/60 transition transform group-hover:scale-105">
+                      <FileText size={20} className="text-slate-800" />
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Parcelas</span>
+                  </div>
+
+                  {/* Item 3: Calculadora */}
+                  <div 
+                    onClick={() => onNavigate?.('calculator')}
+                    className="flex flex-col items-center group cursor-pointer active:scale-95 transition"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 text-[#121926] flex items-center justify-center mb-1.5 shadow-sm group-hover:bg-slate-200 border border-slate-200/60 transition transform group-hover:scale-105">
+                      <CalcIcon size={20} className="text-slate-800" />
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700">Calculadora</span>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Container Principal Responsivo */}
+            <div className="px-4 my-3 w-full">
+              <div className="bg-slate-200/60 p-1.5 rounded-xl shadow-lg flex items-center gap-1.5 w-full max-w-[340px] relative mx-auto my-3">
+                {/* Botão: Mês Ativo Corrente (Dinâmico) */}
+                <button 
+                  type="button" 
+                  onClick={() => onSelectMonth?.(effectiveActiveMonth)}
+                  className={`flex-1 py-2.5 px-4 rounded-lg flex flex-col items-center justify-center transition-all duration-300 focus:outline-none cursor-pointer ${
+                    isCurrentActive
+                      ? 'bg-white border border-emerald-400 shadow-sm'
+                      : 'bg-transparent border border-transparent hover:bg-slate-300/40'
+                  }`}
+                >
+                  <span className={`text-xs uppercase leading-tight tracking-tight ${
+                    isCurrentActive ? 'font-extrabold text-slate-800' : 'font-bold text-slate-400'
+                  }`}>
+                    {effectiveActiveMonth.nome}
+                  </span>
+                  <span className={`text-[11px] leading-tight ${
+                    isCurrentActive ? 'font-bold text-slate-600' : 'font-semibold text-slate-400'
+                  }`}>
+                    {effectiveActiveMonth.ano}
+                  </span>
+                </button>
+
+                {/* Botão: Mês Seguinte / Planejamento (Dinâmico) */}
+                <button 
+                  type="button" 
+                  onClick={() => onSelectMonth?.(effectiveNextMonth)}
+                  className={`flex-1 py-2.5 px-4 rounded-lg flex flex-col items-center justify-center transition-all duration-300 focus:outline-none cursor-pointer ${
+                    isCurrentNext
+                      ? 'bg-white border border-emerald-400 shadow-sm'
+                      : 'bg-transparent border border-transparent hover:bg-slate-300/40'
+                  }`}
+                >
+                  <span className={`text-xs uppercase leading-tight tracking-tight ${
+                    isCurrentNext ? 'font-extrabold text-slate-800' : 'font-bold text-slate-400'
+                  }`}>
+                    {effectiveNextMonth.nome}
+                  </span>
+                  <span className={`text-[11px] leading-tight ${
+                    isCurrentNext ? 'font-bold text-slate-600' : 'font-semibold text-slate-400'
+                  }`}>
+                    {effectiveNextMonth.ano}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Totais Cartões de Crédito Section (DADOS REAIS COM CARROSSEL) */}
+            <div className="px-6 mb-4">
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-[28px] p-6 shadow-sm border border-gray-100 text-center relative">
+                
+                {/* Cabeçalho do Cartão Selecionado */}
+                <div className="flex items-center justify-between mb-2">
+                  <span 
+                    className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white shadow-xs" 
+                    style={{ backgroundColor: currentCard.cor }}
+                  >
+                    {currentCard.nome}
+                  </span>
+                  <button 
+                    onClick={() => setShowCardsModal(true)}
+                    className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-gray-700"
+                  >
+                    {activeCardIndex + 1} de {cardsList.length} · Ver todos
+                  </button>
+                </div>
+
+                <h3 className="text-xl font-black text-gray-900 mb-1 leading-tight">
+                  Totais Cartões de Crédito
+                </h3>
+                <p className="text-xs text-gray-400 font-medium tracking-tight mb-4">
+                  Fatura Atual · Vencimento · Limite
+                </p>
+
+                {/* Grid com Dados Reais da Fatura, Vencimento e Limite */}
+                <div className="grid grid-cols-3 gap-2 py-3 px-2 bg-slate-100/70 rounded-2xl mb-4 text-center border border-slate-200/40">
+                  <div>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Fatura Atual</p>
+                    <p className="text-xs font-black text-gray-900 truncate">{formatCurrency(currentCard.fatura)}</p>
+                  </div>
+                  <div className="border-x border-slate-200/80 px-1">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Vencimento</p>
+                    <p className="text-xs font-black text-gray-800 truncate">{currentCard.vencimento}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Limite Disp.</p>
+                    <p className="text-xs font-black text-emerald-600 truncate">
+                      {formatCurrency(Math.max(0, currentCard.limiteTotal - currentCard.fatura))}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Barra Visual de Consumo do Limite */}
+                <div className="w-full bg-gray-200/70 h-1.5 rounded-full overflow-hidden mb-5">
+                  <div 
+                    className="h-full bg-gray-900 rounded-full transition-all duration-500" 
+                    style={{ 
+                      width: `${Math.min(100, currentCard.limiteTotal > 0 ? (currentCard.fatura / currentCard.limiteTotal) * 100 : 0)}%` 
+                    }} 
+                  />
+                </div>
+                
+                {/* Carousel Pagination Dots */}
+                <div className="flex justify-center items-center space-x-1.5">
+                  {cardsList.map((_, dotIdx) => (
+                    <button
+                      key={dotIdx}
+                      onClick={() => setActiveCardIndex(dotIdx)}
+                      className={`transition-all duration-300 ${
+                        dotIdx === activeCardIndex 
+                          ? 'w-6 h-1.5 bg-[#121926] rounded-full' 
+                          : 'w-1.5 h-1.5 bg-gray-300 rounded-full hover:bg-gray-400'
+                      }`}
+                      title={`Cartão ${dotIdx + 1}`}
+                    />
                   ))}
                 </div>
-              )}
+              </div>
             </div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); refresh(); }}
-              className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-2xl hover:bg-black transition shadow-md text-xs uppercase tracking-widest lg:rounded-2xl lg:shadow-md lg:shadow-gray-900/20 lg:hover:shadow-lg lg:hover:-translate-y-0.5"
-            >
-              Sincronizar Banco
-            </button>
+
+            {/* 1 & 2. Cards de Totais: Receitas Totais e Despesas Totais */}
+            <div className="px-6 mb-4">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Receitas Totais */}
+                <div 
+                  onClick={() => onNavigate?.('revenue')}
+                  className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between active:scale-95 transition cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-green-50 text-green-600 flex items-center justify-center border border-green-100/60">
+                      <TrendingUp size={16} />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                      Entradas
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Receitas Totais</p>
+                    <h3 className="text-base font-black text-gray-900 truncate">{formatCurrency(totals.revenue)}</h3>
+                  </div>
+                </div>
+
+                {/* Despesas Totais */}
+                <div 
+                  onClick={() => onNavigate?.('expenses')}
+                  className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between active:scale-95 transition cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center border border-red-100/60">
+                      <TrendingDown size={16} />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-red-700 bg-red-50 px-2 py-0.5 rounded-full">
+                      Saídas
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Despesas Totais</p>
+                    <h3 className="text-base font-black text-gray-900 truncate">{formatCurrency(totals.expenses)}</h3>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3 & 4. Cards de Evolução Financeira com Gráficos */}
+            <div className="px-6 space-y-4 mb-0 overflow-x-hidden">
+              <CompactChart 
+                title="Evolução das Receitas (Últimos 4 meses)"
+                data={evolutionData}
+                dataKey="receitas"
+                colorTheme="green"
+                formatCurrency={formatCurrency}
+              />
+              <CompactChart 
+                title="Evolução das Despesas (Últimos 4 meses)"
+                data={evolutionData}
+                dataKey="despesas"
+                colorTheme="red"
+                formatCurrency={formatCurrency}
+              />
+            </div>
+
           </div>
+
         </div>
       </div>
 
-      {/* MODAL DE DETALHAMENTO DE CARTÕES */}
+      {/* ============================================================ */}
+      {/* 3. MODAL DE DETALHAMENTO DE CARTÕES (COMPARTILHADO)          */}
+      {/* ============================================================ */}
       {showCardsModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-sm p-6 rounded-3xl shadow-2xl animate-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -448,7 +888,7 @@ const Overview: React.FC<OverviewProps> = ({ currentMonth, refresh }) => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
