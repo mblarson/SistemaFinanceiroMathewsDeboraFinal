@@ -604,21 +604,34 @@ export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) 
                             <Calendar size={16} />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">
-                              {item.estabelecimento ? item.estabelecimento : (
-                                <span className="text-gray-400 font-medium italic">Sem estabelecimento</span>
-                              )}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                {formatDateSafe(item.data)}
-                              </p>
-                              {item.origem === 'apple_pay' && (
-                                <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 text-gray-600 bg-gray-100 rounded border border-gray-200/80">
-                                  Apple Pay
-                                </span>
-                              )}
-                            </div>
+                            {item.estabelecimento ? (
+                              <>
+                                <p className="text-xs font-bold text-gray-900 truncate" title={item.estabelecimento}>
+                                  {item.estabelecimento}
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                    {formatDateSafe(item.data)}
+                                  </p>
+                                  {item.origem === 'apple_pay' && (
+                                    <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 text-gray-600 bg-gray-100 rounded border border-gray-200/80">
+                                      Apple Pay
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-bold text-gray-800">
+                                  {formatDateSafe(item.data)}
+                                </p>
+                                {item.origem === 'apple_pay' && (
+                                  <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 text-gray-600 bg-gray-100 rounded border border-gray-200/80">
+                                    Apple Pay
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 

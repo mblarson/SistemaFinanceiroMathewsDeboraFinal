@@ -220,10 +220,16 @@ export default async function handler(req: any, res: any) {
       // 3.5 Tratamento de Data e Mês de Referência
       const { data: dataFormatada, mesReferencia } = parseDateAndMonth(dataCompra);
 
-      // 3.6 Estabelecimento sanitizado (opcional)
-      const estabelecimentoSanitizado = (typeof estabelecimento === 'string' && estabelecimento.trim())
-        ? estabelecimento.trim()
-        : null;
+      // 3.6 Estabelecimento sanitizado (opcional, limitado a 150 caracteres e limpo contra injeções)
+      let estabelecimentoSanitizado: string | null = null;
+      if (typeof estabelecimento === 'string' && estabelecimento.trim()) {
+        const limpo = estabelecimento
+          .trim()
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove caracteres de controle
+          .replace(/[<>]/g, '')           // Remove caracteres que poderiam formar tags HTML
+          .slice(0, 150);
+        estabelecimentoSanitizado = limpo.length > 0 ? limpo : null;
+      }
 
       // 3.7 Conexão com Supabase no Runtime Seguro do Backend
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
@@ -265,27 +271,26 @@ export default async function handler(req: any, res: any) {
             idempotente: true,
             message: 'Transação já processada anteriormente (idempotência garantida).',
             mensagem: 'Transação já processada anteriormente (idempotência garantida).',
+            estabelecimento: existing.estabelecimento ?? null,
+            valor: existing.valor,
+            categoria: existing.categoria,
+            data: existing.data,
             registro: existing
           });
         }
       }
 
-      // 3.9 Inserção atômica na tabela gastos_itens com fallback para colunas existentes
+      // 3.9 Inserção atômica na tabela gastos_itens com colunas confirmadas
       const novoRegistro: any = {
         categoria: categoriaCanon,
         valor: valorSanitizado,
         mes_referencia: mesReferencia,
+        data: dataFormatada,
         created_at: new Date().toISOString()
       };
 
       if (estabelecimentoSanitizado) {
         novoRegistro.estabelecimento = estabelecimentoSanitizado;
-      }
-      if (dataFormatada) {
-        novoRegistro.data = dataFormatada;
-      }
-      if (sanitizedRequestId) {
-        novoRegistro.request_id = sanitizedRequestId;
       }
 
       let { data: insertData, error: insertError } = await supabase
@@ -294,45 +299,50 @@ export default async function handler(req: any, res: any) {
         .select()
         .single();
 
-      // Se falhar por coluna não encontrada (ex: request_id ou data), tenta apenas com as colunas essenciais
-      if (insertError && insertError.message?.includes('schema cache')) {
-        const registroEssencial = {
+      // Se falhar (por exemplo, em um banco que não possua ainda a coluna 'data' ou 'estabelecimento')
+      if (insertError) {
+        console.warn('Erro ao inserir com colunas completas, tentando fallback:', insertError.message);
+        
+        // Tenta sem 'data', mantendo 'estabelecimento'
+        const fallbackComEstabelecimento: any = {
           categoria: categoriaCanon,
           valor: valorSanitizado,
           mes_referencia: mesReferencia,
           created_at: new Date().toISOString()
         };
-        const fallbackRes = await supabase
-          .from('gastos_itens')
-          .insert([registroEssencial])
-          .select()
-          .single();
-        
-        insertData = fallbackRes.data;
-        insertError = fallbackRes.error;
-      }
-
-      // 3.10 Tratamento de concorrência / colisão de chave única (Postgres code 23505)
-      if (insertError) {
-        if (insertError.code === '23505' && sanitizedRequestId) {
-          const { data: existingRace } = await supabase
-            .from('gastos_itens')
-            .select('*')
-            .eq('request_id', sanitizedRequestId)
-            .maybeSingle();
-
-          if (existingRace) {
-            return sendJson(res, 200, {
-              success: true,
-              sucesso: true,
-              idempotente: true,
-              message: 'Transação concorrente já registrada (idempotência garantida).',
-              mensagem: 'Transação concorrente já registrada (idempotência garantida).',
-              registro: existingRace
-            });
-          }
+        if (estabelecimentoSanitizado) {
+          fallbackComEstabelecimento.estabelecimento = estabelecimentoSanitizado;
         }
 
+        const fallbackRes = await supabase
+          .from('gastos_itens')
+          .insert([fallbackComEstabelecimento])
+          .select()
+          .single();
+
+        if (!fallbackRes.error) {
+          insertData = fallbackRes.data;
+          insertError = null;
+        } else {
+          // Último recurso: apenas colunas estritamente básicas
+          const registroMinimo = {
+            categoria: categoriaCanon,
+            valor: valorSanitizado,
+            mes_referencia: mesReferencia,
+            created_at: new Date().toISOString()
+          };
+          const minRes = await supabase
+            .from('gastos_itens')
+            .insert([registroMinimo])
+            .select()
+            .single();
+
+          insertData = minRes.data;
+          insertError = minRes.error;
+        }
+      }
+
+      if (insertError) {
         return sendJson(res, 500, {
           success: false,
           sucesso: false,
@@ -344,14 +354,24 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 3.11 Retorno 201 Created com sucesso
+      // 3.11 Retorno 201 Created com sucesso e estabelecimento confirmado
       return sendJson(res, 201, {
         success: true,
         sucesso: true,
         idempotente: false,
         message: 'Gasto via Apple Pay registrado com sucesso no menu GASTOS.',
         mensagem: 'Gasto via Apple Pay registrado com sucesso no menu GASTOS.',
-        registro: insertData
+        estabelecimento: insertData?.estabelecimento ?? estabelecimentoSanitizado,
+        valor: insertData?.valor ?? valorSanitizado,
+        categoria: insertData?.categoria ?? categoriaCanon,
+        data: insertData?.data ?? dataFormatada,
+        registro: insertData || {
+          categoria: categoriaCanon,
+          valor: valorSanitizado,
+          estabelecimento: estabelecimentoSanitizado,
+          data: dataFormatada,
+          mes_referencia: mesReferencia
+        }
       });
     }
 

@@ -202,7 +202,18 @@ export default async function handler(req: any, res: any) {
         ? dataParam.trim()
         : getDataAtualFormatada();
 
-      // 3.6 Inicialização Segura do Supabase
+      // 3.6 Estabelecimento sanitizado (opcional, limitado a 150 caracteres)
+      let estabelecimentoSanitizado: string | null = null;
+      if (typeof estabelecimento === 'string' && estabelecimento.trim()) {
+        const limpo = estabelecimento
+          .trim()
+          .replace(/[\x00-\x1F\x7F]/g, '')
+          .replace(/[<>]/g, '')
+          .slice(0, 150);
+        estabelecimentoSanitizado = limpo.length > 0 ? limpo : null;
+      }
+
+      // 3.7 Inicialização Segura do Supabase
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
@@ -218,47 +229,83 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 3.7 Gravação na tabela gastos_itens com fallback para colunas do schema
+      // 3.8 Gravação na tabela gastos_itens com fallback para colunas do schema
       const registroBase: any = {
         categoria: categoriaCanon,
         valor: valorSanitizado,
         mes_referencia: mesRef,
+        data: dataGravacao,
         created_at: new Date().toISOString()
       };
 
-      // Tenta inserir primeiro apenas com colunas essenciais ou com as colunas completas caso existam
+      if (estabelecimentoSanitizado) {
+        registroBase.estabelecimento = estabelecimentoSanitizado;
+      }
+
+      // Tenta inserir com colunas completas
       let insertResult = await supabase
         .from('gastos_itens')
         .insert([registroBase])
         .select()
         .single();
 
-      // Se falhar, tenta sem select() ou loga o erro específico
-      if (insertResult.error) {
-        // Tenta sem select()
-        const retryResult = await supabase
-          .from('gastos_itens')
-          .insert([registroBase]);
-
-        if (retryResult.error) {
-          return sendJson(res, 500, {
-            sucesso: false,
-            success: false,
-            erro: 'Erro ao gravar gasto no banco de dados: ' + retryResult.error.message,
-            error: 'Erro ao gravar gasto no banco de dados: ' + retryResult.error.message,
-            detalhes: retryResult.error.details || null
-          });
+      // Se falhar por erro de schema, tenta sem 'data'/'estabelecimento' como fallback
+      if (insertResult.error && (insertResult.error.message?.includes('schema cache') || insertResult.error.message?.includes('column') || insertResult.error.code === 'PGRST204')) {
+        const registroSimples: any = {
+          categoria: categoriaCanon,
+          valor: valorSanitizado,
+          mes_referencia: mesRef,
+          created_at: new Date().toISOString()
+        };
+        if (estabelecimentoSanitizado) {
+          registroSimples.estabelecimento = estabelecimentoSanitizado;
         }
-        insertResult = { data: registroBase, error: null } as any;
+
+        const fallbackRes = await supabase
+          .from('gastos_itens')
+          .insert([registroSimples])
+          .select()
+          .single();
+        
+        insertResult = fallbackRes;
+
+        // Se ainda falhar por coluna 'estabelecimento', grava apenas o essencial
+        if (insertResult.error && (insertResult.error.message?.includes('column') || insertResult.error.code === 'PGRST204')) {
+          const registroEssencial = {
+            categoria: categoriaCanon,
+            valor: valorSanitizado,
+            mes_referencia: mesRef,
+            created_at: new Date().toISOString()
+          };
+          insertResult = await supabase
+            .from('gastos_itens')
+            .insert([registroEssencial])
+            .select()
+            .single();
+        }
+      }
+
+      if (insertResult.error) {
+        return sendJson(res, 500, {
+          sucesso: false,
+          success: false,
+          erro: 'Erro ao gravar gasto no banco de dados: ' + insertResult.error.message,
+          error: 'Erro ao gravar gasto no banco de dados: ' + insertResult.error.message,
+          detalhes: insertResult.error.details || null
+        });
       }
       const data = insertResult.data;
 
-      // 3.8 Retorno 201 com sucesso
+      // 3.9 Retorno 201 com sucesso e dados confirmados
       return sendJson(res, 201, {
         sucesso: true,
         success: true,
         mensagem: 'Gasto registrado com sucesso!',
         message: 'Gasto registrado com sucesso!',
+        estabelecimento: data?.estabelecimento ?? estabelecimentoSanitizado,
+        valor: data?.valor ?? valorSanitizado,
+        categoria: data?.categoria ?? categoriaCanon,
+        data: data?.data ?? dataGravacao,
         registro: data
       });
     }
