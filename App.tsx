@@ -421,7 +421,7 @@ const App: React.FC = () => {
               onToggleMenu={() => setIsMobileMenuOpen(prev => !prev)}
             />
           )}
-          {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
+          {view === 'gastos' && <Gastos key={`gst-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} activeMonth={activeMonth} triggerAdd={triggerAdd} />}
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}

@@ -18,18 +18,6 @@ function normalizarCategoria(cat: string): 'Restaurante' | 'Lazer' | 'Conveniên
   return null;
 }
 
-// Obter nome do mês de referência padrão em português (ex: OUTUBRO/2026)
-function getMesReferenciaAtual(): string {
-  const mesesNomes = [
-    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
-    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
-  ];
-  const agora = new Date();
-  const mesNome = mesesNomes[agora.getMonth()];
-  const ano = agora.getFullYear();
-  return `${mesNome}/${ano}`;
-}
-
 // Obter data atual no formato YYYY-MM-DD
 function getDataAtualFormatada(): string {
   const agora = new Date();
@@ -37,6 +25,37 @@ function getDataAtualFormatada(): string {
   const mes = String(agora.getMonth() + 1).padStart(2, '0');
   const dia = String(agora.getDate()).padStart(2, '0');
   return `${ano}-${mes}-${dia}`;
+}
+
+// Busca dinamicamente o primeiro mês ativo do sistema no banco Supabase em ordem cronológica
+async function getPrimeiroMesAtivo(supabase: any): Promise<string> {
+  const monthsOrder = [
+    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
+  ];
+  try {
+    const { data: mesesAtivos, error } = await supabase
+      .from('meses')
+      .select('id, nome, ano, status')
+      .eq('status', 'ativo');
+
+    if (!error && mesesAtivos && mesesAtivos.length > 0) {
+      mesesAtivos.sort((a: any, b: any) => {
+        if (a.ano !== b.ano) return a.ano - b.ano;
+        const idxA = monthsOrder.indexOf(a.nome ? a.nome.trim().toUpperCase() : '');
+        const idxB = monthsOrder.indexOf(b.nome ? b.nome.trim().toUpperCase() : '');
+        return idxA - idxB;
+      });
+      const primeiro = mesesAtivos[0];
+      return `${primeiro.nome.trim().toUpperCase()}/${primeiro.ano}`;
+    }
+  } catch (err) {
+    console.warn('Aviso ao consultar primeiro mês ativo no Supabase:', err);
+  }
+
+  // Fallback seguro caso não haja mês ativo cadastrado
+  const agora = new Date();
+  return `${monthsOrder[agora.getMonth()]}/${agora.getFullYear()}`;
 }
 
 // Helper universal e seguro para envio de respostas (compatível com Express, Vercel e Node HTTP)
@@ -193,11 +212,7 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 3.5 Mês de Referência e Data
-      const mesRef = (typeof mes_referencia === 'string' && mes_referencia.trim()) 
-        ? mes_referencia.trim().toUpperCase() 
-        : getMesReferenciaAtual();
-
+      // 3.5 Data do fato (preserva a data cronológica informada ou a data corrente)
       const dataGravacao = (typeof dataParam === 'string' && dataParam.trim())
         ? dataParam.trim()
         : getDataAtualFormatada();
@@ -217,7 +232,7 @@ export default async function handler(req: any, res: any) {
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
-      let supabase;
+      let supabase: any;
       try {
         supabase = createClient(supabaseUrl, supabaseKey);
       } catch (clientErr: any) {
@@ -228,6 +243,9 @@ export default async function handler(req: any, res: any) {
           error: 'Falha ao conectar com o banco de dados: ' + (clientErr.message || clientErr)
         });
       }
+
+      // 3.8 Atribuição de competência estrita ao primeiro mês ativo do sistema
+      const mesRef = await getPrimeiroMesAtivo(supabase);
 
       // 3.8 Gravação na tabela gastos_itens com fallback para colunas do schema
       const registroBase: any = {
@@ -306,6 +324,7 @@ export default async function handler(req: any, res: any) {
         valor: data?.valor ?? valorSanitizado,
         categoria: data?.categoria ?? categoriaCanon,
         data: data?.data ?? dataGravacao,
+        mes_referencia: data?.mes_referencia ?? mesRef,
         registro: data
       });
     }

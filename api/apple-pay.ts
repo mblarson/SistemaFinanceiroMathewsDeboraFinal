@@ -18,39 +18,52 @@ function normalizarCategoria(cat: string): 'Restaurante' | 'Lazer' | 'Conveniên
   return null;
 }
 
-// Extrai a data ISO (YYYY-MM-DD) e o mês de referência (ex: OUTUBRO/2026) a partir da data de compra
-function parseDateAndMonth(dataCompraStr?: string): { data: string; mesReferencia: string } {
-  const mesesNomes = [
-    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
-    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
-  ];
-
+// Extrai a data ISO (YYYY-MM-DD) preservando o dia real da transação
+function parseDataCompra(dataCompraStr?: string): string {
   if (dataCompraStr && typeof dataCompraStr === 'string') {
     const match = dataCompraStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (match) {
-      const year = parseInt(match[1], 10);
-      const monthIdx = parseInt(match[2], 10) - 1;
-      const day = match[3];
-      if (monthIdx >= 0 && monthIdx < 12) {
-        return {
-          data: `${year}-${String(monthIdx + 1).padStart(2, '0')}-${day}`,
-          mesReferencia: `${mesesNomes[monthIdx]}/${year}`
-        };
-      }
+      return `${match[1]}-${match[2]}-${match[3]}`;
     }
   }
 
-  // Fallback para a data/mês corrente
+  // Fallback para a data de hoje no formato YYYY-MM-DD
   const agora = new Date();
   const year = agora.getFullYear();
-  const monthIdx = agora.getMonth();
+  const month = String(agora.getMonth() + 1).padStart(2, '0');
   const day = String(agora.getDate()).padStart(2, '0');
-  const month = String(monthIdx + 1).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  return {
-    data: `${year}-${month}-${day}`,
-    mesReferencia: `${mesesNomes[monthIdx]}/${year}`
-  };
+// Busca dinamicamente o primeiro mês ativo do sistema no banco Supabase em ordem cronológica
+async function getPrimeiroMesAtivo(supabase: any): Promise<string> {
+  const monthsOrder = [
+    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
+  ];
+  try {
+    const { data: mesesAtivos, error } = await supabase
+      .from('meses')
+      .select('id, nome, ano, status')
+      .eq('status', 'ativo');
+
+    if (!error && mesesAtivos && mesesAtivos.length > 0) {
+      mesesAtivos.sort((a: any, b: any) => {
+        if (a.ano !== b.ano) return a.ano - b.ano;
+        const idxA = monthsOrder.indexOf(a.nome ? a.nome.trim().toUpperCase() : '');
+        const idxB = monthsOrder.indexOf(b.nome ? b.nome.trim().toUpperCase() : '');
+        return idxA - idxB;
+      });
+      const primeiro = mesesAtivos[0];
+      return `${primeiro.nome.trim().toUpperCase()}/${primeiro.ano}`;
+    }
+  } catch (err) {
+    console.warn('Aviso ao consultar primeiro mês ativo no Supabase:', err);
+  }
+
+  // Fallback seguro caso não haja mês ativo cadastrado
+  const agora = new Date();
+  return `${monthsOrder[agora.getMonth()]}/${agora.getFullYear()}`;
 }
 
 // Helper universal e seguro para envio de respostas (compatível com Express, Vercel e Node HTTP)
@@ -217,8 +230,8 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // 3.5 Tratamento de Data e Mês de Referência
-      const { data: dataFormatada, mesReferencia } = parseDateAndMonth(dataCompra);
+      // 3.5 Tratamento de Data cronológica do fato (preserva o dia real da transação)
+      const dataFormatada = parseDataCompra(dataCompra);
 
       // 3.6 Estabelecimento sanitizado (opcional, limitado a 150 caracteres e limpo contra injeções)
       let estabelecimentoSanitizado: string | null = null;
@@ -235,7 +248,7 @@ export default async function handler(req: any, res: any) {
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://bnhxmjcgyqwjombhrdks.supabase.co';
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaHhtamNneXF3am9tYmhyZGtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDk3MDksImV4cCI6MjA4MDQyNTcwOX0.wg7k8DJhE29d24BzGwp5ltUx_x_4iXjQFOC55x3t4B8';
 
-      let supabase;
+      let supabase: any;
       try {
         supabase = createClient(supabaseUrl, supabaseKey);
       } catch (clientErr: any) {
@@ -248,6 +261,9 @@ export default async function handler(req: any, res: any) {
           mensagem: 'Falha ao inicializar conexão segura com o banco de dados: ' + (clientErr.message || clientErr)
         });
       }
+
+      // 3.8 Atribuição de competência vinculada estritamente ao primeiro mês ativo do sistema
+      const mesReferencia = await getPrimeiroMesAtivo(supabase);
 
       const sanitizedRequestId = (typeof requestId === 'string' && requestId.trim())
         ? requestId.trim()
@@ -365,6 +381,7 @@ export default async function handler(req: any, res: any) {
         valor: insertData?.valor ?? valorSanitizado,
         categoria: insertData?.categoria ?? categoriaCanon,
         data: insertData?.data ?? dataFormatada,
+        mes_referencia: insertData?.mes_referencia ?? mesReferencia,
         registro: insertData || {
           categoria: categoriaCanon,
           valor: valorSanitizado,

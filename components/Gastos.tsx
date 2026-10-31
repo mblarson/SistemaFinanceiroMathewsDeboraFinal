@@ -20,6 +20,7 @@ import { Month, GastoItem, GastoCategoria } from '../types';
 
 interface GastosProps {
   currentMonth: Month;
+  activeMonth?: Month | null;
   triggerAdd?: number;
 }
 
@@ -102,7 +103,7 @@ const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 };
 
-export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) => {
+export const Gastos: React.FC<GastosProps> = ({ currentMonth, activeMonth, triggerAdd = 0 }) => {
   const [gastos, setGastos] = useState<GastoItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedCategoria, setSelectedCategoria] = useState<GastoCategoria | null>(null);
@@ -123,9 +124,21 @@ export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) 
   // Toast feedback próprio do sistema
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  // Competência exibida na tela (para visualização dos dados do ciclo selecionado)
   const mesReferencia = useMemo(() => {
     return `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
   }, [currentMonth]);
+
+  // Competência do primeiro mês ativo para novos lançamentos (regra obrigatória de negócio)
+  const mesAtivoDestino = useMemo(() => {
+    if (activeMonth && activeMonth.status === 'ativo') {
+      return `${activeMonth.nome.trim().toUpperCase()}/${activeMonth.ano}`;
+    }
+    if (currentMonth.status === 'ativo') {
+      return `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
+    }
+    return `${currentMonth.nome.trim().toUpperCase()}/${currentMonth.ano}`;
+  }, [activeMonth, currentMonth]);
 
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
@@ -253,7 +266,7 @@ export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) 
       valor: valorNumerico,
       data: formData.data,
       estabelecimento: formData.estabelecimento.trim() ? formData.estabelecimento.trim() : null,
-      mes_referencia: mesReferencia
+      mes_referencia: mesAtivoDestino
     };
 
     try {
@@ -276,15 +289,22 @@ export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) 
           mes_referencia: payload.mes_referencia,
           created_at: new Date().toISOString()
         };
-        const updated = [newItem, ...gastos];
-        setGastos(updated);
-        localStorage.setItem(getLocalStorageKey(mesReferencia), JSON.stringify(updated));
-        showToast('Gasto salvo com sucesso! (Armazenado localmente até execução do script SQL)');
+
+        if (mesAtivoDestino === mesReferencia) {
+          const updated = [newItem, ...gastos];
+          setGastos(updated);
+          localStorage.setItem(getLocalStorageKey(mesReferencia), JSON.stringify(updated));
+        }
+        showToast(`Gasto salvo com sucesso! (Competência: ${mesAtivoDestino})`);
       } else {
-        const updated = [data, ...gastos];
-        setGastos(updated);
-        localStorage.setItem(getLocalStorageKey(mesReferencia), JSON.stringify(updated));
-        showToast('Gasto registrado com sucesso!', 'success');
+        if (mesAtivoDestino === mesReferencia) {
+          const updated = [data, ...gastos];
+          setGastos(updated);
+          localStorage.setItem(getLocalStorageKey(mesReferencia), JSON.stringify(updated));
+          showToast('Gasto registrado com sucesso no mês ativo!', 'success');
+        } else {
+          showToast(`Gasto alocado com sucesso no primeiro mês ativo (${mesAtivoDestino})!`, 'success');
+        }
       }
 
       // Limpa formulário e retorna à listagem da categoria
@@ -488,13 +508,18 @@ export const Gastos: React.FC<GastosProps> = ({ currentMonth, triggerAdd = 0 }) 
                       <Plus size={14} className="text-gray-900" />
                       Novo Lançamento
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsAdding(false)}
-                      className="text-xs text-gray-400 hover:text-gray-600 font-bold"
-                    >
-                      Fechar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black text-emerald-800 bg-emerald-100/90 border border-emerald-300/60 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        Competência: {mesAtivoDestino}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsAdding(false)}
+                        className="text-xs text-gray-400 hover:text-gray-600 font-bold cursor-pointer"
+                      >
+                        Fechar
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
