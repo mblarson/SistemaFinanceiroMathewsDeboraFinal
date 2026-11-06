@@ -87,3 +87,27 @@ export interface GastoItem {
   created_at?: string;
   observacao?: string;
 }
+
+export interface ContaReceberVenda {
+  id: string;
+  descricao: string;
+  valor_total: number;
+  valor_parcela: number;
+  total_parcelas: number;
+  mes_inicio: string;
+  created_at?: string;
+}
+
+export interface ContaReceberParcela {
+  id: string;
+  venda_id: string;
+  descricao: string;
+  numero_parcela: number;
+  total_parcelas: number;
+  valor_parcela: number;
+  mes_referencia: string;
+  mes_id?: number | null;
+  status: 'pendente' | 'recebido';
+  data_recebimento?: string | null;
+  created_at?: string;
+}

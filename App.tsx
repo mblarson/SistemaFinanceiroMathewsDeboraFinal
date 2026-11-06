@@ -16,7 +16,8 @@ import {
   Calculator as CalcIcon,
   ShoppingBag,
   ChevronUp,
-  FileText
+  FileText,
+  HandCoins
 } from 'lucide-react';
 import { supabaseClient } from './services/supabase';
 import { Month } from './types';
@@ -27,6 +28,7 @@ import Revenue from './components/Revenue';
 import Banks from './components/Banks';
 import Closing from './components/Closing';
 import Installments from './components/Installments';
+import Receivables from './components/Receivables';
 import Calculator from './components/Calculator';
 
 const App: React.FC = () => {
@@ -48,6 +50,7 @@ const App: React.FC = () => {
     revenue: 'Receitas',
     banks: 'Cartões',
     installments: 'Parcelas',
+    receivables: 'Contas a Receber',
     closing: 'Arquivo',
     calculator: 'Calculadora'
   };
@@ -58,6 +61,8 @@ const App: React.FC = () => {
       setView('calculator');
     } else if (window.location.pathname === '/gastos') {
       setView('gastos');
+    } else if (window.location.pathname === '/contas-a-receber') {
+      setView('receivables');
     }
   }, []);
 
@@ -203,7 +208,13 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
     
     // Atualiza a URL para suporte básico a rotas (opcional, mas solicitado pelo usuário)
-    const path = newView === 'calculator' ? '/calculadora' : newView === 'gastos' ? '/gastos' : '/';
+    const path = newView === 'calculator' 
+      ? '/calculadora' 
+      : newView === 'gastos' 
+        ? '/gastos' 
+        : newView === 'receivables' 
+          ? '/contas-a-receber' 
+          : '/';
     window.history.pushState({}, '', path);
   };
 
@@ -236,7 +247,7 @@ const App: React.FC = () => {
     );
   }
 
-  const showAddAction = ['expenses', 'revenue', 'installments', 'banks', 'gastos'].includes(view);
+  const showAddAction = ['expenses', 'revenue', 'installments', 'banks', 'gastos', 'receivables'].includes(view);
   const canEdit = currentContextMonth.status !== 'fechado';
 
   return (
@@ -279,6 +290,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:gap-3">
                 <NavItem icon={<Banknote size={20} />} label="Cartões" active={view === 'banks'} onClick={() => handleNavigate('banks')} />
                 <NavItem icon={<CalendarClock size={20} />} label="Parcelas" active={view === 'installments'} onClick={() => handleNavigate('installments')} />
+                <NavItem icon={<HandCoins size={20} />} label="Contas a Receber" active={view === 'receivables'} onClick={() => handleNavigate('receivables')} />
               </div>
             </div>
             
@@ -434,6 +446,15 @@ const App: React.FC = () => {
               triggerAdd={triggerAdd} 
             />
           )}
+          {view === 'receivables' && (
+            <Receivables 
+              key={`rc-${refreshKey}-${currentContextMonth.id}`} 
+              currentMonth={currentContextMonth} 
+              activeMonth={activeMonth}
+              provisionMonth={provisionMonth}
+              triggerAdd={triggerAdd} 
+            />
+          )}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
           {view === 'calculator' && <Calculator key="calculator" />}
         </div>
@@ -499,6 +520,15 @@ const App: React.FC = () => {
               >
                 <CalendarClock size={14} className="w-4 text-center" />
                 <span>Parcelas</span>
+              </button>
+              <button 
+                onClick={() => { handleNavigate('receivables'); setIsMobileMenuOpen(false); }} 
+                className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl font-medium text-xs transition ${
+                  view === 'receivables' ? 'bg-[#1e293b] text-[#84cc16]' : 'text-gray-200 hover:bg-[#1e293b]'
+                }`}
+              >
+                <HandCoins size={14} className="w-4 text-center" />
+                <span>Contas a Receber</span>
               </button>
               <button 
                 onClick={() => { handleNavigate('closing'); setIsMobileMenuOpen(false); }} 
