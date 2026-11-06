@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw, CreditCard, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { CalendarClock, Trash2, X as LucideX, Info, Wallet, Pencil, RefreshCw, CreditCard, Building2, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { supabaseClient, DEFAULT_BANCOS } from '../services/supabase';
 import { Month, Installment, Bank } from '../types';
 
@@ -147,6 +147,7 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const [projecting, setProjecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [termoBusca, setTermoBusca] = useState('');
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -175,6 +176,23 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   const parseCurrency = (value: string) => parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  // Normalização limpa para busca em tempo real (sem acentos e case-insensitive)
+  const normalizarTexto = (texto: string) =>
+    (texto || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // Filtro reativo de parcelas por descrição
+  const parcelasFiltradas = useMemo(() => {
+    const busca = normalizarTexto(termoBusca);
+    if (!busca) return installments;
+    return installments.filter(item =>
+      normalizarTexto(item.descricao || '').includes(busca)
+    );
+  }, [installments, termoBusca]);
 
   const openEditModal = (item: Installment) => {
     setEditingId(item.id);
@@ -682,14 +700,63 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
             </div>
           </div>
 
+          {/* Barra de Pesquisa em Tempo Real - 100% da largura útil */}
+          <div className="w-full mb-6">
+            <div className="relative flex items-center w-full">
+              <input
+                type="text"
+                value={termoBusca}
+                onChange={(e) => setTermoBusca(e.target.value)}
+                placeholder="Buscar parcela por descrição..."
+                className="w-full h-12 sm:h-14 pl-5 sm:pl-6 pr-24 sm:pr-28 bg-white text-gray-800 placeholder-gray-400 text-sm font-medium rounded-full border border-gray-200 shadow-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all"
+              />
+              
+              {/* Botões à direita: Limpar (se houver texto) e Botão circular escuro com Lupa */}
+              <div className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                {termoBusca && (
+                  <button
+                    type="button"
+                    onClick={() => setTermoBusca('')}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-full transition-all cursor-pointer"
+                    title="Limpar pesquisa"
+                  >
+                    <LucideX size={14} />
+                  </button>
+                )}
+                <div 
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm shrink-0 pointer-events-none"
+                >
+                  <Search size={16} className="text-white" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {installments.length === 0 ? (
             <div className="col-span-full py-20 bg-white rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 lg:rounded-3xl lg:shadow-sm">
               <CalendarClock size={32} className="mb-2 opacity-20" />
               <p className="font-bold uppercase tracking-widest text-[10px]">Sem parcelamentos para {currentMonth.nome}</p>
             </div>
+          ) : parcelasFiltradas.length === 0 ? (
+            <div className="col-span-full py-16 px-6 bg-white rounded-3xl border border-gray-200 flex flex-col items-center justify-center text-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                <Search size={22} />
+              </div>
+              <h3 className="text-gray-800 font-bold text-sm mb-1">Nenhuma parcela encontrada</h3>
+              <p className="text-gray-500 text-xs mb-4 max-w-xs">
+                Não foram encontrados resultados para &ldquo;<span className="font-semibold text-gray-700">{termoBusca}</span>&rdquo;.
+              </p>
+              <button
+                onClick={() => setTermoBusca('')}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-xs font-semibold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              >
+                <LucideX size={13} />
+                Limpar pesquisa
+              </button>
+            </div>
           ) : (
-            installments.map(item => {
+            parcelasFiltradas.map(item => {
               const pAtual = item.parcela_atual ?? 1;
               const pTotal = item.total_parcelas ?? 1;
               const pValor = item.valor_parcela ?? 0;
