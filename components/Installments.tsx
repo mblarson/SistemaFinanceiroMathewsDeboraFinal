@@ -6,6 +6,8 @@ import { Month, Installment, Bank } from '../types';
 
 interface InstallmentsProps {
   currentMonth: Month;
+  activeMonth?: Month | null;
+  provisionMonth?: Month | null;
   triggerAdd: number;
 }
 
@@ -134,20 +136,51 @@ export const getBankVisualConfig = (bank: Bank | null | undefined) => {
   };
 };
 
-const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd }) => {
+const MESES_NOMES = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+const getMonthIndex = (nome: string) => MESES_NOMES.indexOf((nome || '').trim().toUpperCase());
+const getMonthVal = (m: Month) => m.ano * 12 + getMonthIndex(m.nome);
+
+const Installments: React.FC<InstallmentsProps> = ({ currentMonth, activeMonth, provisionMonth, triggerAdd }) => {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [banks, setBanks] = useState<Bank[]>(DEFAULT_BANCOS);
+  const [allMonthsList, setAllMonthsList] = useState<Month[]>([]);
+  const [activeMonthsList, setActiveMonthsList] = useState<Month[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showBankSummaryModal, setShowBankSummaryModal] = useState(false);
   const [showProjectConfirmModal, setShowProjectConfirmModal] = useState(false);
+  
+  // Estados para edição e cascata
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [editingOriginalItem, setEditingOriginalItem] = useState<Installment | null>(null);
+  const [showEditCascadeModal, setShowEditCascadeModal] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<any | null>(null);
+
+  // Estados para exclusão e cascata
+  const [itemToDelete, setItemToDelete] = useState<Installment | null>(null);
+  const [showDeleteCascadeModal, setShowDeleteCascadeModal] = useState(false);
+
   const [formData, setFormData] = useState({ desc: '', val: 'R$ 0,00', atual: '1', total: '1', banco_id: '' });
   const [projecting, setProjecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [termoBusca, setTermoBusca] = useState('');
+
+  const meses_nomes = MESES_NOMES;
+
+  const isPrimeiroMes = useMemo(() => {
+    if (activeMonth && currentMonth.id === activeMonth.id) return true;
+    if (activeMonthsList.length > 0 && currentMonth.id === activeMonthsList[0].id) return true;
+    return false;
+  }, [activeMonth, currentMonth, activeMonthsList]);
+
+  const isSegundoMes = useMemo(() => {
+    if (provisionMonth && currentMonth.id === provisionMonth.id) return true;
+    if (activeMonthsList.length > 1 && currentMonth.id === activeMonthsList[1].id) return true;
+    return false;
+  }, [provisionMonth, currentMonth, activeMonthsList]);
+
+  const canEdit = currentMonth.status !== 'fechado';
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -162,11 +195,16 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
 
   useEffect(() => {
     if (triggerAdd > 0) {
+      if (isSegundoMes) {
+        showToast("Modificação não permitida para esse mês", "info");
+        return;
+      }
       setEditingId(null);
+      setEditingOriginalItem(null);
       setFormData({ desc: '', val: 'R$ 0,00', atual: '1', total: '1', banco_id: '' });
       setShowModal(true);
     }
-  }, [triggerAdd]);
+  }, [triggerAdd, isSegundoMes]);
 
   const maskCurrency = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -195,7 +233,12 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   }, [installments, termoBusca]);
 
   const openEditModal = (item: Installment) => {
+    if (isSegundoMes) {
+      showToast("Modificação não permitida para esse mês", "info");
+      return;
+    }
     setEditingId(item.id);
+    setEditingOriginalItem(item);
     setFormData({
       desc: item.descricao || '',
       val: maskCurrency(((item.valor_parcela || 0) * 100).toString()),
@@ -206,26 +249,52 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     setShowModal(true);
   };
 
+  const openDeleteModal = (item: Installment) => {
+    if (isSegundoMes) {
+      showToast("Modificação não permitida para esse mês", "info");
+      return;
+    }
+    setItemToDelete(item);
+    setShowDeleteCascadeModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+
+    if (isSegundoMes) {
+      showToast("Modificação não permitida para esse mês", "error");
+      return;
+    }
+
     const val = parseCurrency(formData.val);
-    
+    const parsedBancoId = formData.banco_id && formData.banco_id.trim() !== ''
+      ? parseInt(formData.banco_id, 10)
+      : null;
+
+    const payload: any = {
+      mes_id: currentMonth.id,
+      descricao: formData.desc.trim(),
+      valor_parcela: val,
+      parcela_atual: parseInt(formData.atual, 10),
+      total_parcelas: parseInt(formData.total, 10),
+      banco_id: parsedBancoId
+    };
+
+    // Se estiver editando uma parcela no 1º mês ativo, abre a confirmação de cascata
+    if (editingId && isPrimeiroMes) {
+      setPendingPayload(payload);
+      setShowEditCascadeModal(true);
+      return;
+    }
+
+    // Caso contrário (criação de nova parcela ou edição fora do 1º mês), executa diretamente
+    await saveInstallment(payload, false);
+  };
+
+  const saveInstallment = async (payload: any, applyCascade: boolean) => {
     setSubmitting(true);
     try {
-      const parsedBancoId = formData.banco_id && formData.banco_id.trim() !== ''
-        ? parseInt(formData.banco_id, 10)
-        : null;
-
-      const payload: any = {
-        mes_id: currentMonth.id,
-        descricao: formData.desc.trim(),
-        valor_parcela: val,
-        parcela_atual: parseInt(formData.atual, 10),
-        total_parcelas: parseInt(formData.total, 10),
-        banco_id: parsedBancoId
-      };
-
       if (editingId) {
         // Atualização otimista imediata mantendo a exata mesma posição e ordenação visual
         setInstallments(prev => prev.map(item => item.id === editingId ? { ...item, ...payload } : item));
@@ -237,40 +306,62 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
           .eq('id', editingId)
           .select();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
-        // Propaga o banco_id para outras parcelas da mesma série de compra
-        // para garantir consistência ao alternar meses
-        if (payload.descricao && payload.total_parcelas) {
-          try {
-            await supabaseClient
+        // Se confirmado aplicar em cascata a partir do 1º mês ativo:
+        if (applyCascade && isPrimeiroMes) {
+          const currentVal = getMonthVal(currentMonth);
+          const futureMonths = allMonthsList.filter(m => getMonthVal(m) > currentVal);
+          const futureMonthIds = futureMonths.map(m => m.id);
+
+          if (futureMonthIds.length > 0) {
+            const origDesc = (editingOriginalItem?.descricao || payload.descricao).trim();
+            const origTotal = editingOriginalItem?.total_parcelas || payload.total_parcelas;
+
+            const cascadeUpdatePayload: any = {
+              descricao: payload.descricao,
+              valor_parcela: payload.valor_parcela,
+              banco_id: payload.banco_id,
+              total_parcelas: payload.total_parcelas
+            };
+
+            const { error: cascadeError } = await supabaseClient
               .from('parcelamentos')
-              .update({ banco_id: parsedBancoId })
-              .eq('descricao', payload.descricao)
-              .eq('total_parcelas', payload.total_parcelas)
-              .neq('id', editingId);
-          } catch (propErr) {
-            console.warn("Aviso ao propagar banco para parcelas da mesma série:", propErr);
+              .update(cascadeUpdatePayload)
+              .in('mes_id', futureMonthIds)
+              .ilike('descricao', origDesc)
+              .eq('total_parcelas', origTotal);
+
+            if (cascadeError) {
+              console.error("Erro ao aplicar alteração em cascata:", cascadeError);
+              showToast("Aviso: Parcela atualizada neste mês, mas houve falha ao replicar nos meses futuros.", "error");
+            }
           }
         }
 
+        setShowEditCascadeModal(false);
         setShowModal(false);
         setEditingId(null);
-        showToast("Parcelamento atualizado com sucesso!", "success");
+        setEditingOriginalItem(null);
+        setPendingPayload(null);
+        showToast(
+          applyCascade 
+            ? "Parcelamento atualizado com sucesso e replicado para os meses futuros!" 
+            : "Parcelamento atualizado com sucesso!", 
+          "success"
+        );
+        await fetchData();
       } else {
-        const { data: created, error } = await supabaseClient
+        const { error } = await supabaseClient
           .from('parcelamentos')
           .insert([payload])
           .select();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         setShowModal(false);
         setEditingId(null);
+        setEditingOriginalItem(null);
         showToast("Parcelamento criado com sucesso!", "success");
         await fetchData();
       }
@@ -283,17 +374,60 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
     }
   };
 
-  const handleDelete = async (id: number) => {
-    await supabaseClient.from('parcelamentos').delete().eq('id', id);
-    setConfirmDeleteId(null);
-    fetchData();
+  const handleExecuteDelete = async (cascade: boolean) => {
+    if (!itemToDelete || submitting) return;
+    setSubmitting(true);
+    try {
+      // Exclui do mês corrente
+      const { error: delError } = await supabaseClient
+        .from('parcelamentos')
+        .delete()
+        .eq('id', itemToDelete.id);
+
+      if (delError) throw delError;
+
+      // Se confirmado em cascata no 1º mês ativo, exclui dos meses futuros vinculados
+      if (cascade && isPrimeiroMes) {
+        const currentVal = getMonthVal(currentMonth);
+        const futureMonths = allMonthsList.filter(m => getMonthVal(m) > currentVal);
+        const futureMonthIds = futureMonths.map(m => m.id);
+
+        if (futureMonthIds.length > 0) {
+          const origDesc = itemToDelete.descricao.trim();
+          const origTotal = itemToDelete.total_parcelas;
+
+          const { error: cascadeDelError } = await supabaseClient
+            .from('parcelamentos')
+            .delete()
+            .in('mes_id', futureMonthIds)
+            .ilike('descricao', origDesc)
+            .eq('total_parcelas', origTotal);
+
+          if (cascadeDelError) {
+            console.error("Erro ao excluir parcelas futuras:", cascadeDelError);
+            showToast("Aviso: Parcela excluída neste mês, mas falhou ao remover de alguns meses futuros.", "error");
+          }
+        }
+      }
+
+      setInstallments(prev => prev.filter(i => i.id !== itemToDelete.id));
+      setShowDeleteCascadeModal(false);
+      setItemToDelete(null);
+      showToast(
+        cascade
+          ? "Parcela excluída com sucesso deste mês e de todos os meses futuros!"
+          : "Parcela excluída com sucesso!",
+        "success"
+      );
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erro ao excluir parcelamento:", err);
+      showToast("Erro ao excluir parcela: " + (err.message || "Tente novamente"), "error");
+      await fetchData();
+    } finally {
+      setSubmitting(false);
+    }
   };
-
-  const canEdit = currentMonth.status !== 'fechado';
-
-  const meses_nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
-
-  const getMonthIndex = (nome: string) => meses_nomes.indexOf((nome || '').trim().toUpperCase());
 
   // Helper para buscar ou criar mês com status 'ativo' (evita erro de check constraint 'meses_status_check')
   const getOrCreateMonth = async (nome: string, ano: number): Promise<Month | null> => {
@@ -405,6 +539,20 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Carrega meses para identificar 1º e 2º ativos e competências futuras
+      const { data: mData } = await supabaseClient
+        .from('meses')
+        .select('*')
+        .order('ano', { ascending: true });
+
+      if (mData) {
+        setAllMonthsList(mData);
+        const act = mData
+          .filter(m => m.status === 'ativo')
+          .sort((a, b) => getMonthVal(a) - getMonthVal(b));
+        setActiveMonthsList(act);
+      }
+
       // Carrega bancos cadastrados para associação visual
       const { data: bData } = await supabaseClient
         .from('bancos')
@@ -677,9 +825,14 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
             <div className="bg-white p-3.5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-center gap-2 lg:rounded-3xl lg:shadow-md lg:shadow-gray-200/50 lg:border-gray-150/70">
               {canEdit ? (
                 <button 
-                  onClick={handleStartProjection}
-                  disabled={projecting}
-                  className="w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 shadow-md cursor-pointer shrink-0 lg:rounded-2xl lg:shadow-md lg:hover:shadow-lg lg:hover:-translate-y-0.5"
+                  onClick={isSegundoMes ? undefined : handleStartProjection}
+                  disabled={projecting || isSegundoMes}
+                  title={isSegundoMes ? "Modificação não permitida para esse mês" : "Projetar para Meses Futuros"}
+                  className={`w-full flex-1 min-h-[44px] flex items-center justify-center gap-2 bg-gray-900 text-white px-5 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all shadow-md shrink-0 lg:rounded-2xl lg:shadow-md ${
+                    isSegundoMes
+                      ? 'opacity-40 cursor-not-allowed hover:bg-gray-900 pointer-events-auto'
+                      : 'hover:bg-gray-800 active:scale-95 cursor-pointer lg:hover:shadow-lg lg:hover:-translate-y-0.5'
+                  }`}
                 >
                   <RefreshCw size={14} className={projecting ? 'animate-spin' : ''} />
                   {projecting ? 'Projetando...' : 'Projetar para Meses Futuros'}
@@ -819,16 +972,32 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Pagas: {pagas}/{pTotal}</p>
                       </div>
                     </div>
-                    {canEdit && (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModal(item)} className="text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors"><Pencil size={18} /></button>
-                        {confirmDeleteId === item.id ? (
-                          <button onClick={() => handleDelete(item.id)} className="bg-red-600 text-white font-black text-[9px] uppercase px-3 py-2 rounded-lg ml-2 shadow-sm">Confirmar</button>
-                        ) : (
-                          <button onClick={() => setConfirmDeleteId(item.id)} className="text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <button 
+                        type="button"
+                        disabled={isSegundoMes || !canEdit}
+                        onClick={isSegundoMes || !canEdit ? undefined : () => openEditModal(item)} 
+                        title={isSegundoMes ? "Modificação não permitida para esse mês" : (!canEdit ? "Mês fechado para edição" : "Editar parcela")}
+                        className={isSegundoMes || !canEdit
+                          ? "text-gray-400 opacity-40 cursor-not-allowed hover:bg-transparent pointer-events-auto p-2 bg-gray-50 rounded-lg transition-colors"
+                          : "text-gray-400 hover:text-blue-600 p-2 bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                        }
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <button 
+                        type="button"
+                        disabled={isSegundoMes || !canEdit}
+                        onClick={isSegundoMes || !canEdit ? undefined : () => openDeleteModal(item)} 
+                        title={isSegundoMes ? "Modificação não permitida para esse mês" : (!canEdit ? "Mês fechado para exclusão" : "Excluir parcela")}
+                        className={isSegundoMes || !canEdit
+                          ? "text-gray-400 opacity-40 cursor-not-allowed hover:bg-transparent pointer-events-auto p-2 bg-gray-50 rounded-lg transition-colors"
+                          : "text-gray-400 hover:text-red-500 p-2 bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                        }
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mb-4">
@@ -912,6 +1081,145 @@ const Installments: React.FC<InstallmentsProps> = ({ currentMonth, triggerAdd })
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Alteração em Cascata */}
+      {showEditCascadeModal && pendingPayload && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <RefreshCw size={20} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-gray-900 uppercase tracking-tight">Alteração em Cascata</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Deseja aplicar esta alteração também nas parcelas dos meses seguintes?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-4 mb-5">
+              <p className="text-xs text-blue-900 font-medium leading-relaxed">
+                Você está editando a parcela <strong>&ldquo;{pendingPayload.descricao}&rdquo;</strong> no <strong>1º mês ativo ({currentMonth.nome}/{currentMonth.ano})</strong>.
+              </p>
+              <p className="text-[11px] text-blue-800 mt-2 leading-relaxed">
+                Ao confirmar em cascata, a nova descrição, valor e banco serão replicados para todas as parcelas futuras vinculadas, mantendo a contagem sequencial (ex: 2/10, 3/10) de cada mês.
+              </p>
+              <p className="text-[10px] text-blue-600 font-bold mt-2 uppercase tracking-wide">
+                * Meses anteriores já concluídos/fechados permanecem intactos.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => saveInstallment(pendingPayload, true)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md uppercase text-[10px] tracking-widest transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle2 size={14} />
+                {submitting ? 'Salvando...' : 'Sim, aplicar também aos meses seguintes'}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => saveInstallment(pendingPayload, false)}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl uppercase text-[10px] tracking-widest transition-all active:scale-98 cursor-pointer disabled:opacity-50 text-center"
+              >
+                {submitting ? 'Salvando...' : `Apenas neste mês (${currentMonth.nome})`}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowEditCascadeModal(false)}
+                className="w-full py-2.5 text-gray-400 hover:text-gray-600 font-bold uppercase text-[10px] tracking-widest transition-colors cursor-pointer text-center"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão em Cascata */}
+      {showDeleteCascadeModal && itemToDelete && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md p-6 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-gray-900 uppercase tracking-tight">Excluir Parcela</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Parcela: <span className="font-bold text-gray-800">{itemToDelete.descricao}</span> ({itemToDelete.parcela_atual}/{itemToDelete.total_parcelas}x)
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 mb-5">
+              <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                {isPrimeiroMes ? (
+                  <>
+                    Você está excluindo esta parcela a partir do <strong>1º mês ativo ({currentMonth.nome}/{currentMonth.ano})</strong>. 
+                    Deseja remover apenas deste mês ou excluir também de <strong>todos os meses seguintes vinculados</strong>?
+                  </>
+                ) : (
+                  <>
+                    Tem certeza que deseja excluir esta parcela da competência de <strong>{currentMonth.nome}/{currentMonth.ano}</strong>?
+                  </>
+                )}
+              </p>
+              {isPrimeiroMes && (
+                <p className="text-[10px] text-amber-700 font-bold mt-2 uppercase tracking-wide">
+                  * Meses anteriores já concluídos/fechados não serão afetados.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              {isPrimeiroMes ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleExecuteDelete(true)}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl shadow-md uppercase text-[10px] tracking-widest transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                    {submitting ? 'Excluindo...' : 'Excluir deste e de todos os meses futuros'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => handleExecuteDelete(false)}
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl uppercase text-[10px] tracking-widest transition-all active:scale-98 cursor-pointer disabled:opacity-50 text-center"
+                  >
+                    {submitting ? 'Excluindo...' : `Excluir apenas deste mês (${currentMonth.nome})`}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => handleExecuteDelete(false)}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl shadow-md uppercase text-[10px] tracking-widest transition-all active:scale-98 cursor-pointer disabled:opacity-50 text-center"
+                >
+                  {submitting ? 'Excluindo...' : 'Confirmar Exclusão'}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => { setShowDeleteCascadeModal(false); setItemToDelete(null); }}
+                className="w-full py-2.5 text-gray-400 hover:text-gray-600 font-bold uppercase text-[10px] tracking-widest transition-colors cursor-pointer text-center"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

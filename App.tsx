@@ -425,7 +425,15 @@ const App: React.FC = () => {
           {view === 'expenses' && <Expenses key={`ex-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'revenue' && <Revenue key={`rv-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
           {view === 'banks' && <Banks key={`bk-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
-          {view === 'installments' && <Installments key={`in-${refreshKey}-${currentContextMonth.id}`} currentMonth={currentContextMonth} triggerAdd={triggerAdd} />}
+          {view === 'installments' && (
+            <Installments 
+              key={`in-${refreshKey}-${currentContextMonth.id}`} 
+              currentMonth={currentContextMonth} 
+              activeMonth={activeMonth}
+              provisionMonth={provisionMonth}
+              triggerAdd={triggerAdd} 
+            />
+          )}
           {view === 'closing' && <Closing key={`cl-${refreshKey}`} currentMonth={activeMonth!} onSelectMonth={handleContextChange} onRefresh={init} />}
           {view === 'calculator' && <Calculator key="calculator" />}
         </div>
